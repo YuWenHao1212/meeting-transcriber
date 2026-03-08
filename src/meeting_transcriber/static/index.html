@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeting Transcriber</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>Meeting Transcriber</h1>
+    </div>
+    <div class="header-center">
+      <span id="timer" class="timer">00:00:00</span>
+      <span id="status-badge" class="badge badge-idle">Idle</span>
+    </div>
+    <div class="header-right">
+      <span id="cost" class="cost">$0.0000</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel panel-context">
+      <h2>Context / Playbook</h2>
+      <div id="context-list" class="scroll-area">
+        <p class="placeholder">No context loaded. Start a session with context files.</p>
+      </div>
+    </section>
+
+    <section class="panel panel-transcript">
+      <h2>Transcript</h2>
+      <div id="transcript" class="scroll-area">
+        <p class="placeholder">Waiting for recording to start...</p>
+      </div>
+    </section>
+
+    <section class="panel panel-coaching">
+      <h2>Coaching Prompts</h2>
+      <div id="coaching" class="scroll-area">
+        <p class="placeholder">Coaching prompts will appear here during recording.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="actions">
+      <button id="btn-start" class="btn btn-start" onclick="startRecording()">Start</button>
+      <button id="btn-stop" class="btn btn-stop" disabled onclick="stopRecording()">Stop</button>
+      <button id="btn-summarize" class="btn btn-secondary" disabled onclick="summarize()">Summarize</button>
+      <button id="btn-save" class="btn btn-secondary" disabled onclick="save()">Save</button>
+    </div>
+    <div id="action-items" class="action-items">
+      <h3>Action Items</h3>
+      <ul id="action-list"></ul>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

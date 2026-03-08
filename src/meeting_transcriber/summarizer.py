@@ -22,6 +22,27 @@ DEFAULT_TEMPLATE = """\
 - (items requiring future attention)\
 """
 
+PLAYBOOK_COVERAGE_TEMPLATE = """\
+
+## Playbook 覆蓋率
+✅ (objective) — 在 [timestamp] 討論
+❌ (objective) — 未討論到\
+"""
+
+PLAYBOOK_COVERAGE_INSTRUCTIONS = (
+  "\n\n"
+  "## Playbook 覆蓋率 Cross-Reference Instructions\n\n"
+  "A pre-meeting playbook with objectives is provided. "
+  "Cross-reference the transcript with the pre-meeting objectives.\n\n"
+  "Add a '## Playbook 覆蓋率' section at the end of the output.\n"
+  "For each objective in the playbook:\n"
+  "- If addressed in the transcript, use: ✅ (objective) — 在 [timestamp] 討論\n"
+  "  Include the approximate timestamp from the transcript where it was discussed.\n"
+  "- If NOT addressed, use: ❌ (objective) — 未討論到\n\n"
+  "Output the Playbook 覆蓋率 section in Traditional Chinese (繁體中文).\n"
+  "Note which objectives were addressed and which were not addressed."
+)
+
 
 def _build_system_prompt(
   playbook: str | None = None,
@@ -43,12 +64,7 @@ def _build_system_prompt(
     "- Output in markdown format"
   )
   if playbook:
-    base += (
-      "\n\n"
-      "A pre-meeting playbook with objectives is provided. "
-      "Cross-reference the transcript with the pre-meeting objectives. "
-      "Note which objectives were addressed and which were not addressed."
-    )
+    base += PLAYBOOK_COVERAGE_INSTRUCTIONS
   return base
 
 

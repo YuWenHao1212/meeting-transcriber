@@ -1,0 +1,275 @@
+/* Meeting Transcriber — Dark Theme */
+
+:root {
+  --bg: #1a1a2e;
+  --panel: #16213e;
+  --panel-border: #0f3460;
+  --accent: #e94560;
+  --accent-green: #00d97e;
+  --accent-yellow: #ffc107;
+  --text: #e0e0e0;
+  --text-dim: #8899aa;
+  --text-bright: #ffffff;
+  --radius: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* --- Header --- */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.timer {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-right: 12px;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-idle {
+  background: var(--text-dim);
+  color: var(--bg);
+}
+
+.badge-recording {
+  background: var(--accent);
+  color: var(--text-bright);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.cost {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* --- Main Grid --- */
+.grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 1px;
+  background: var(--panel-border);
+  overflow: hidden;
+}
+
+.panel {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel h2 {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 14px;
+}
+
+/* Transcript lines */
+.transcript-line {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  animation: fadeIn 0.3s ease-in;
+}
+
+.transcript-line .timestamp {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 8px;
+}
+
+.transcript-line .text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Coaching cards */
+.coaching-card {
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+  animation: slideIn 0.4s ease-out;
+}
+
+.coaching-card .label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* --- Footer --- */
+footer {
+  padding: 12px 24px;
+  background: var(--panel);
+  border-top: 1px solid var(--panel-border);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-start {
+  background: var(--accent-green);
+  color: var(--bg);
+}
+
+.btn-stop {
+  background: var(--accent);
+  color: var(--text-bright);
+}
+
+.btn-secondary {
+  background: var(--panel-border);
+  color: var(--text);
+}
+
+.btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.action-items {
+  display: none;
+}
+
+.action-items.visible {
+  display: block;
+}
+
+.action-items h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.action-items ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.action-items li {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--accent-yellow);
+}
+
+.action-items li::before {
+  content: "\25B6 ";
+  font-size: 10px;
+}
+
+/* Scrollbar */
+.scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-area::-webkit-scrollbar-thumb {
+  background: var(--panel-border);
+  border-radius: 3px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .panel-context,
+  .panel-coaching {
+    max-height: 200px;
+  }
+}

@@ -202,6 +202,28 @@ def live(
 
 
 @app.command()
+def serve(
+  port: Annotated[int, typer.Option("--port", "-p", help="Server port")] = 8765,
+  context: Annotated[Optional[list[Path]], typer.Option("--context", "-c", help="Context files")] = None,
+  engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "openai",
+  language: Annotated[str, typer.Option("--language", "-l", help="Language code")] = "zh",
+) -> None:
+  """Start the Web UI for real-time meeting transcription."""
+  import uvicorn
+
+  from meeting_transcriber.server import create_app
+
+  web_app = create_app(
+    context_paths=[str(p) for p in context] if context else [],
+    engine_name=engine,
+    language=language,
+  )
+  console.print("[bold green]Meeting Transcriber Web UI[/]")
+  console.print(f"Open [link=http://localhost:{port}]http://localhost:{port}[/link]")
+  uvicorn.run(web_app, host="0.0.0.0", port=port)
+
+
+@app.command()
 def init() -> None:
   """Set up configuration directory and API key template."""
   from meeting_transcriber.config import init_config

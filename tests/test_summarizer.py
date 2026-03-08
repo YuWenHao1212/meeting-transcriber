@@ -117,6 +117,72 @@ class TestSummarizeWithPlaybook:
     assert SAMPLE_TRANSCRIPT in user_content
 
 
+class TestPlaybookCoverageSection:
+  """Test that playbook triggers Playbook 覆蓋率 cross-reference instructions."""
+
+  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
+  def test_system_prompt_includes_coverage_section_header(self, mock_cls):
+    mock_client = MagicMock()
+    mock_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _make_mock_response()
+
+    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    system_prompt = call_kwargs["system"]
+    assert "Playbook 覆蓋率" in system_prompt
+
+  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
+  def test_system_prompt_includes_checkmark_for_addressed(self, mock_cls):
+    mock_client = MagicMock()
+    mock_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _make_mock_response()
+
+    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    system_prompt = call_kwargs["system"]
+    assert "\u2705" in system_prompt  # ✅
+
+  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
+  def test_system_prompt_includes_cross_for_missed(self, mock_cls):
+    mock_client = MagicMock()
+    mock_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _make_mock_response()
+
+    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    system_prompt = call_kwargs["system"]
+    assert "\u274c" in system_prompt  # ❌
+
+  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
+  def test_system_prompt_references_timestamps(self, mock_cls):
+    mock_client = MagicMock()
+    mock_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _make_mock_response()
+
+    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    system_prompt = call_kwargs["system"]
+    assert "timestamp" in system_prompt.lower()
+
+  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
+  def test_no_coverage_section_without_playbook(self, mock_cls):
+    mock_client = MagicMock()
+    mock_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _make_mock_response()
+
+    summarize(SAMPLE_TRANSCRIPT)
+
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    system_prompt = call_kwargs["system"]
+    assert "Playbook 覆蓋率" not in system_prompt
+    assert "\u2705" not in system_prompt
+    assert "\u274c" not in system_prompt
+
+
 class TestSummarizeWithTemplate:
   """Test summarize() with custom template."""
 

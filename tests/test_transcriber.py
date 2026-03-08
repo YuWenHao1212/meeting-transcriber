@@ -52,25 +52,6 @@ class TestListEngines:
       assert "cost_per_minute" in entry
 
 
-# --- Placeholder engines raise NotImplementedError ---
-
-
-class TestPlaceholderEngines:
-  def test_qwen_not_implemented(self):
-    engine = get_engine("qwen")
-    with pytest.raises(NotImplementedError, match="Phase 3"):
-      engine.transcribe_file(Path("test.wav"))
-
-  def test_soniox_not_implemented(self):
-    engine = get_engine("soniox")
-    with pytest.raises(NotImplementedError, match="Phase 3"):
-      engine.transcribe_file(Path("test.wav"))
-
-  def test_groq_not_implemented(self):
-    engine = get_engine("groq")
-    with pytest.raises(NotImplementedError, match="Phase 3"):
-      engine.transcribe_file(Path("test.wav"))
-
 
 # --- OpenAI engine tests ---
 
