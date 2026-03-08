@@ -39,7 +39,7 @@ def _run_claude(
       ["claude", "-p", prompt],
       capture_output=True,
       text=True,
-      timeout=30,
+      timeout=120,
     )
     output = result.stdout.strip()
     if result.returncode != 0:
@@ -57,8 +57,8 @@ def _run_claude(
     logger.error("claude CLI not found in PATH")
     callback("Claude Code CLI not found. Install: npm install -g @anthropic-ai/claude-code")
   except subprocess.TimeoutExpired:
-    logger.warning("Claude CLI timed out after 30s")
-    callback("Deep coaching timed out (30s limit).")
+    logger.warning("Claude CLI timed out after 120s")
+    callback("Deep coaching timed out (120s limit).")
   except Exception as e:
     logger.warning("Claude CLI error: %s", e)
     callback(f"Deep coaching error: {e}")
