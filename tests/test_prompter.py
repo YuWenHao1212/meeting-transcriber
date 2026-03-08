@@ -63,21 +63,25 @@ def empty_file(tmp_path: Path) -> Path:
   return p
 
 
-def _make_haiku_response(data: list[dict]) -> MagicMock:
-  """Create a mock Anthropic messages.create() response with JSON."""
-  content_block = MagicMock()
-  content_block.text = json.dumps(data)
+def _make_chat_response(data: list[dict]) -> MagicMock:
+  """Create a mock Azure OpenAI chat completion response with JSON."""
+  message = MagicMock()
+  message.content = json.dumps(data)
+  choice = MagicMock()
+  choice.message = message
   response = MagicMock()
-  response.content = [content_block]
+  response.choices = [choice]
   return response
 
 
-def _make_haiku_response_with_codeblock(data: list[dict]) -> MagicMock:
+def _make_chat_response_with_codeblock(data: list[dict]) -> MagicMock:
   """Create a mock response wrapped in markdown code blocks."""
-  content_block = MagicMock()
-  content_block.text = f"```json\n{json.dumps(data)}\n```"
+  message = MagicMock()
+  message.content = f"```json\n{json.dumps(data)}\n```"
+  choice = MagicMock()
+  choice.message = message
   response = MagicMock()
-  response.content = [content_block]
+  response.choices = [choice]
   return response
 
 
@@ -145,13 +149,13 @@ class TestLoadContext:
 
 
 class TestDetectQuestions:
-  """Test detect_questions() with mocked Anthropic client."""
+  """Test detect_questions() with mocked Azure OpenAI client."""
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_returns_detected_questions(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_returns_detected_questions(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response(
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.return_value = _make_chat_response(
       [
         {"question": "What is the timeline?", "keywords": ["timeline", "deadline"]},
         {"question": "How much is the budget?", "keywords": ["budget", "cost"]},
@@ -165,11 +169,11 @@ class TestDetectQuestions:
     assert result[0].question == "What is the timeline?"
     assert "timeline" in result[0].keywords
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_handles_code_block_response(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_handles_code_block_response(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response_with_codeblock(
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.return_value = _make_chat_response_with_codeblock(
       [
         {"question": "What about pricing?", "keywords": ["pricing"]},
       ]
@@ -188,40 +192,42 @@ class TestDetectQuestions:
     result = detect_questions("   \n  ")
     assert result == []
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_api_error_returns_empty(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_api_error_returns_empty(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.side_effect = RuntimeError("API down")
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.side_effect = RuntimeError("API down")
 
     result = detect_questions("Some transcript text.")
 
     assert result == []
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_invalid_json_returns_empty(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_invalid_json_returns_empty(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    content_block = MagicMock()
-    content_block.text = "not valid json"
+    mock_get_client.return_value = mock_client
+    message = MagicMock()
+    message.content = "not valid json"
+    choice = MagicMock()
+    choice.message = message
     response = MagicMock()
-    response.content = [content_block]
-    mock_client.messages.create.return_value = response
+    response.choices = [choice]
+    mock_client.chat.completions.create.return_value = response
 
     result = detect_questions("Some transcript text.")
 
     assert result == []
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_uses_haiku_model(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_uses_nano_model(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response([])
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.return_value = _make_chat_response([])
 
     detect_questions("Hello")
 
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    assert "haiku" in call_kwargs["model"]
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert "nano" in call_kwargs["model"]
 
 
 # ---------------------------------------------------------------------------
@@ -367,13 +373,13 @@ class TestGeneratePromptCard:
 
 
 class TestDetectActionItems:
-  """Test detect_action_items() with mocked Anthropic client."""
+  """Test detect_action_items() with mocked Azure OpenAI client."""
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_returns_action_items(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_returns_action_items(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response(
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.return_value = _make_chat_response(
       [
         {"text": "Draft proposal", "owner": "Bob", "deadline": "Friday"},
         {"text": "Review budget", "owner": None, "deadline": None},
@@ -393,21 +399,21 @@ class TestDetectActionItems:
     result = detect_action_items("")
     assert result == []
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_api_error_returns_empty(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_api_error_returns_empty(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.side_effect = RuntimeError("API down")
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.side_effect = RuntimeError("API down")
 
     result = detect_action_items("Some text")
 
     assert result == []
 
-  @patch("meeting_transcriber.prompter.anthropic")
-  def test_handles_code_block_response(self, mock_anthropic):
+  @patch("meeting_transcriber.prompter._get_client")
+  def test_handles_code_block_response(self, mock_get_client):
     mock_client = MagicMock()
-    mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response_with_codeblock(
+    mock_get_client.return_value = mock_client
+    mock_client.chat.completions.create.return_value = _make_chat_response_with_codeblock(
       [
         {"text": "Send report", "owner": "Alice", "deadline": "Monday"},
       ]

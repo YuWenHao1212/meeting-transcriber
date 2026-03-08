@@ -29,6 +29,9 @@ class SaveRequest(BaseModel):
   output_path: str
 
 
+_LIVE_TRANSCRIPT_PATH = Path("/tmp/mt-live-transcript.md")
+
+
 def _new_session() -> dict[str, Any]:
   """Return a fresh session state dict."""
   return {
@@ -166,8 +169,12 @@ def _recording_loop_realtime(
       }
     )
 
-    # Run coaching prompt pipeline
-    _run_prompter(session, text, session.get("context_chunks", []))
+    # Append to live transcript file for Claude Code CLI
+    try:
+      with open(_LIVE_TRANSCRIPT_PATH, "a", encoding="utf-8") as f:
+        f.write(f"[{timestamp_str}] {text}\n")
+    except Exception:
+      pass
 
   def on_error(text: str) -> None:
     session["_ws_queue"].append({"type": "error", "text": text})
@@ -273,8 +280,7 @@ def _transcribe_new_chunks(
       }
     )
 
-    # Run coaching prompt pipeline
-    _run_prompter(session, result.full_text, context_chunks or [])
+    pass  # Coaching is now triggered manually via /api/coach
 
 
 def _load_session_context_chunks(session: dict[str, Any]) -> None:
@@ -310,7 +316,7 @@ def _run_prompter(
       card_text = generate_prompt_card(question, matches)
       session["_ws_queue"].append(
         {
-          "type": "coaching",
+          "type": "coaching_nano",
           "text": card_text,
         }
       )
@@ -432,6 +438,9 @@ def create_app(
     session["total_cost"] = 0.0
     session["_ws_queue"] = []
 
+    # Reset live transcript file for Claude Code CLI
+    _LIVE_TRANSCRIPT_PATH.write_text("", encoding="utf-8")
+
     # Load additional context from request
     if body and body.context_paths:
       extra = _load_context_files(body.context_paths)
@@ -440,9 +449,6 @@ def create_app(
 
     # Load structured context chunks for coaching prompt engine
     _load_session_context_chunks(session)
-
-    # Push context to WebSocket clients
-    _queue_context(session)
 
     # Start recording in background thread
     if app.state.record:
@@ -545,6 +551,77 @@ def create_app(
         "action_items": session["action_items"],
       }
     )
+
+  @app.post("/api/coach")
+  async def coach_me() -> JSONResponse:
+    """On-demand coaching: analyze recent transcript against playbook."""
+    from meeting_transcriber.prompter import generate_coaching_strategy, load_context
+
+    # Grab last ~10 seconds of transcript (last few chunks)
+    recent = session["transcript_chunks"][-5:] if session["transcript_chunks"] else []
+    recent_text = "\n".join(recent)
+    if not recent_text.strip():
+      return JSONResponse(
+        {"error": "No recent transcript to analyze"},
+        status_code=400,
+      )
+
+    # Load context chunks if not already loaded
+    if not session.get("context_chunks") and session.get("context_paths"):
+      session["context_chunks"] = load_context(session["context_paths"])
+
+    # Also use raw context text for the LLM
+    playbook_text = "\n\n".join(session["context"]) if session["context"] else ""
+
+    strategy = generate_coaching_strategy(recent_text, playbook_text)
+
+    # Queue to WebSocket
+    session["_ws_queue"].append({"type": "coaching_nano", "text": strategy})
+
+    return JSONResponse({"strategy": strategy, "source": "nano"})
+
+  @app.post("/api/coach/opus")
+  async def coach_opus() -> JSONResponse:
+    """On-demand deep coaching via Claude Code CLI (Opus)."""
+    from meeting_transcriber.opus_coach import run_opus_coaching
+
+    recent = session["transcript_chunks"][-10:] if session["transcript_chunks"] else []
+    recent_text = "\n".join(recent)
+    if not recent_text.strip():
+      return JSONResponse(
+        {"error": "No recent transcript to analyze"},
+        status_code=400,
+      )
+
+    playbook_text = "\n\n".join(session["context"]) if session["context"] else ""
+
+    def on_result(text: str) -> None:
+      session["_ws_queue"].append({"type": "coaching_opus", "text": text})
+
+    run_opus_coaching(recent_text, playbook_text, on_result)
+
+    return JSONResponse({"status": "processing", "source": "opus"})
+
+  @app.get("/api/transcript/live")
+  async def get_live_transcript() -> JSONResponse:
+    """Get recent transcript chunks for Claude Code CLI."""
+    return JSONResponse(
+      {
+        "chunks": session["transcript_chunks"],
+        "recent": session["transcript_chunks"][-5:],
+        "context": session["context"],
+        "file": str(_LIVE_TRANSCRIPT_PATH),
+      }
+    )
+
+  @app.post("/api/coach/push")
+  async def push_coaching(body: dict) -> JSONResponse:
+    """External coaching push — allows Claude Code CLI to send coaching cards."""
+    text = body.get("text", "")
+    if not text.strip():
+      return JSONResponse({"error": "Empty text"}, status_code=400)
+    session["_ws_queue"].append({"type": "coaching_opus", "text": text})
+    return JSONResponse({"status": "ok"})
 
   @app.post("/api/save")
   async def save_notes(body: SaveRequest) -> JSONResponse:

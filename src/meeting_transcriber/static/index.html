@@ -42,9 +42,19 @@
     </section>
 
     <section class="panel panel-coaching">
-      <h2>Coaching Prompts</h2>
-      <div id="coaching" class="scroll-area">
-        <p class="placeholder">Coaching prompts will appear here during recording.</p>
+      <div class="coaching-split">
+        <div class="coaching-sub" id="coaching-nano-panel">
+          <h2>Quick Coach <span class="coaching-tag tag-nano">Nano</span></h2>
+          <div id="coaching-nano" class="scroll-area">
+            <p class="placeholder">Press "Quick Coach" for fast strategy tips.</p>
+          </div>
+        </div>
+        <div class="coaching-sub" id="coaching-opus-panel">
+          <h2>Deep Coach <span class="coaching-tag tag-opus">Opus</span></h2>
+          <div id="coaching-opus" class="scroll-area">
+            <p class="placeholder">Press "Deep Coach" for in-depth analysis.</p>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -53,6 +63,9 @@
     <div class="actions">
       <button id="btn-start" class="btn btn-start" onclick="startRecording()">Start</button>
       <button id="btn-stop" class="btn btn-stop" disabled onclick="stopRecording()">Stop</button>
+      <button id="btn-coach-nano" class="btn btn-coach-nano" disabled onclick="coachNano()">Quick Coach</button>
+      <button id="btn-coach-opus" class="btn btn-coach-opus" disabled onclick="coachOpus()">Deep Coach</button>
+      <button id="btn-coach-both" class="btn btn-coach-both" disabled onclick="coachBoth()">Both</button>
       <button id="btn-summarize" class="btn btn-secondary" disabled onclick="summarize()">Summarize</button>
       <button id="btn-save" class="btn btn-secondary" disabled onclick="save()">Save</button>
     </div>

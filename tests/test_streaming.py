@@ -286,9 +286,9 @@ class TestWebSocketBroadcast:
       client = TestClient(app)
       client.post("/api/start")
 
+      # Context is displayed client-side on upload, not pushed via WS on start
       context_msgs = [m for m in session["_ws_queue"] if m["type"] == "context"]
-      assert len(context_msgs) == 1
-      assert "Agenda" in context_msgs[0]["text"]
+      assert len(context_msgs) == 0
 
 
 class TestCoachingMessages:
@@ -308,7 +308,7 @@ class TestCoachingMessages:
 
     _run_prompter(session, "What is the timeline?", context_chunks)
 
-    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching_nano"]
     assert len(coaching_msgs) == 1
     assert "What is the timeline?" in coaching_msgs[0]["text"]
     assert "plan.md" in coaching_msgs[0]["text"]
@@ -330,7 +330,7 @@ class TestCoachingMessages:
 
     _run_prompter(session, "some transcript", [])
 
-    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching_nano"]
     assert len(coaching_msgs) == 2
 
 
@@ -400,7 +400,7 @@ class TestCoachingWithoutContext:
 
     _run_prompter(session, "What about pricing?", [])
 
-    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching_nano"]
     assert len(coaching_msgs) == 1
     # Card should indicate no matching context
     assert "No matching context found" in coaching_msgs[0]["text"]
@@ -410,7 +410,7 @@ class TestCoachingWithoutContext:
   def test_no_questions_no_coaching(self, mock_detect_q, mock_detect_ai, session):
     _run_prompter(session, "Just chatting", [])
 
-    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching_nano"]
     assert len(coaching_msgs) == 0
 
 
@@ -432,7 +432,7 @@ class TestPrompterErrorResilience:
     _run_prompter(session, "some text", [])
 
     # No coaching messages, but no crash
-    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching_nano"]
     assert len(coaching_msgs) == 0
 
   @patch(

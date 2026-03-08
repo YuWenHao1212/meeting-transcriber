@@ -24,19 +24,19 @@ class TestMessageFormatting:
 
   def test_session_update_includes_language(self):
     msg = _build_session_update("en")
-    assert msg["session"]["asr_options"]["language"] == "en"
+    assert msg["session"]["input_audio_transcription"]["language"] == "en"
 
-  def test_session_update_includes_pcm16_format(self):
+  def test_session_update_includes_pcm_format(self):
     msg = _build_session_update("zh")
-    assert msg["session"]["input_audio_format"] == "pcm16"
+    assert msg["session"]["input_audio_format"] == "pcm"
 
   def test_session_update_includes_sample_rate(self):
     msg = _build_session_update("zh")
     assert msg["session"]["sample_rate"] == 16000
 
-  def test_session_update_enables_itn(self):
+  def test_session_update_includes_modalities(self):
     msg = _build_session_update("zh")
-    assert msg["session"]["asr_options"]["enable_itn"] is True
+    assert msg["session"]["modalities"] == ["text"]
 
   def test_session_update_includes_vad(self):
     msg = _build_session_update("zh")
@@ -226,8 +226,8 @@ class TestStreamerInit:
     assert streamer._api_key == "env-key"
 
   def test_start_raises_without_api_key(self):
-    streamer = QwenRealtimeStreamer(api_key="")
     with patch.dict("os.environ", {}, clear=True):
+      streamer = QwenRealtimeStreamer(api_key="")
       with pytest.raises(RuntimeError, match="DASHSCOPE_API_KEY"):
         streamer.start()
 

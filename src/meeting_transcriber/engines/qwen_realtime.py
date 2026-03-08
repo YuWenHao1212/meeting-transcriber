@@ -39,14 +39,16 @@ def _build_session_update(language: str) -> dict:
     "event_id": _event_id(),
     "type": "session.update",
     "session": {
-      "input_audio_format": "pcm16",
+      "modalities": ["text"],
+      "input_audio_format": "pcm",
       "sample_rate": 16000,
-      "asr_options": {
+      "input_audio_transcription": {
         "language": language,
-        "enable_itn": True,
       },
       "turn_detection": {
         "type": "server_vad",
+        "threshold": 0.0,
+        "silence_duration_ms": 400,
       },
     },
   }
@@ -156,25 +158,27 @@ class QwenRealtimeStreamer:
     if not self._running:
       return
 
-    self._running = False
     try:
       if self._ws is not None:
         self._send_json(_build_session_finish())
         self._ws.close()
     except Exception as e:
       logger.warning("Error closing WebSocket: %s", e)
+    finally:
+      self._running = False
 
     if self._recv_thread is not None:
       self._recv_thread.join(timeout=3)
 
   def _send_json(self, msg: dict) -> None:
     """Send a JSON message over the WebSocket."""
-    if self._ws is None:
+    if self._ws is None or not self._running:
       return
     try:
       self._ws.send(json.dumps(msg))
     except Exception as e:
       logger.error("WebSocket send error: %s", e)
+      self._running = False
       if self._on_error:
         self._on_error(f"WebSocket send error: {e}")
 

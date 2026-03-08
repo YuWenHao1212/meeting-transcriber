@@ -9,13 +9,140 @@ const timerEl = document.getElementById("timer");
 const statusBadge = document.getElementById("status-badge");
 const costEl = document.getElementById("cost");
 const transcriptEl = document.getElementById("transcript");
-const coachingEl = document.getElementById("coaching");
+const coachingNanoEl = document.getElementById("coaching-nano");
+const coachingOpusEl = document.getElementById("coaching-opus");
+const coachingNanoPanel = document.getElementById("coaching-nano-panel");
+const coachingOpusPanel = document.getElementById("coaching-opus-panel");
 const actionList = document.getElementById("action-list");
 const actionItems = document.getElementById("action-items");
 const btnStart = document.getElementById("btn-start");
 const btnStop = document.getElementById("btn-stop");
+const btnCoachNano = document.getElementById("btn-coach-nano");
+const btnCoachOpus = document.getElementById("btn-coach-opus");
+const btnCoachBoth = document.getElementById("btn-coach-both");
 const btnSummarize = document.getElementById("btn-summarize");
 const btnSave = document.getElementById("btn-save");
+
+// --- Simple Markdown renderer ---
+function renderMarkdown(md) {
+  let html = escapeHtml(md);
+
+  // Horizontal rules
+  html = html.replace(/^---$/gm, "<hr>");
+
+  // Headers (must come before bold processing)
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Wikilinks [[target|display]] or [[target]]
+  html = html.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '<span class="wikilink">$2</span>');
+  html = html.replace(/\[\[([^\]]+)\]\]/g, '<span class="wikilink">$1</span>');
+
+  // Links [text](url)
+  html = html.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener">$1</a>',
+  );
+
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
+
+  // Tables — detect lines with | separators
+  html = renderTables(html);
+
+  // Unordered lists (- item)
+  html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
+
+  // Paragraphs: wrap remaining bare lines
+  html = html
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return "";
+      if (/^<(h[1-6]|ul|ol|li|blockquote|hr|table|thead|tbody|tr|th|td|pre|div)/.test(trimmed)) {
+        return line;
+      }
+      return `<p>${line}</p>`;
+    })
+    .join("\n");
+
+  // Clean up empty paragraphs
+  html = html.replace(/<p>\s*<\/p>/g, "");
+
+  return html;
+}
+
+function renderTables(html) {
+  const lines = html.split("\n");
+  const result = [];
+  let tableRows = [];
+  let inTable = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const isTableRow = line.startsWith("|") && line.endsWith("|") && line.includes("|");
+    const isSeparator = /^\|[-:|  ]+\|$/.test(line);
+
+    if (isTableRow) {
+      if (!inTable) {
+        inTable = true;
+        tableRows = [];
+      }
+      if (!isSeparator) {
+        const cells = line
+          .split("|")
+          .slice(1, -1)
+          .map((c) => c.trim());
+        tableRows.push(cells);
+      }
+    } else {
+      if (inTable) {
+        result.push(buildTable(tableRows));
+        inTable = false;
+        tableRows = [];
+      }
+      result.push(lines[i]);
+    }
+  }
+  if (inTable) {
+    result.push(buildTable(tableRows));
+  }
+  return result.join("\n");
+}
+
+function buildTable(rows) {
+  if (rows.length === 0) return "";
+  let html = "<table>";
+  // First row is header
+  html += "<thead><tr>";
+  for (const cell of rows[0]) {
+    html += `<th>${cell}</th>`;
+  }
+  html += "</tr></thead>";
+  // Remaining rows
+  if (rows.length > 1) {
+    html += "<tbody>";
+    for (let i = 1; i < rows.length; i++) {
+      html += "<tr>";
+      for (const cell of rows[i]) {
+        html += `<td>${cell}</td>`;
+      }
+      html += "</tr>";
+    }
+    html += "</tbody>";
+  }
+  html += "</table>";
+  return html;
+}
 
 // --- WebSocket ---
 function connectWebSocket() {
@@ -51,8 +178,11 @@ function handleMessage(msg) {
     case "transcript_partial":
       updatePartialTranscript(msg.text || "");
       break;
-    case "coaching":
-      appendCoaching(msg.text || "");
+    case "coaching_nano":
+      appendCoachingNano(msg.text || "");
+      break;
+    case "coaching_opus":
+      appendCoachingOpus(msg.text || "");
       break;
     case "action_item":
       appendActionItem(msg.text || "");
@@ -70,7 +200,6 @@ function handleMessage(msg) {
       appendError(msg.text || "Unknown error");
       break;
     case "status":
-      // Status update from server
       break;
   }
 }
@@ -78,7 +207,6 @@ function handleMessage(msg) {
 // --- Transcript ---
 function appendTranscript(timestamp, text) {
   clearPlaceholder(transcriptEl);
-  // Remove any existing partial line (replaced by final result)
   removePartialLine();
   const line = document.createElement("div");
   line.className = "transcript-line";
@@ -95,7 +223,7 @@ function updatePartialTranscript(text) {
     partial.className = "transcript-line transcript-line-partial";
     transcriptEl.appendChild(partial);
   }
-  partial.innerHTML = `<span class="timestamp" style="opacity:0.5">...</span><span class="text" style="opacity:0.7">${escapeHtml(text)}</span>`;
+  partial.innerHTML = `<span class="timestamp">...</span><span class="text">${escapeHtml(text)}</span>`;
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
@@ -106,13 +234,24 @@ function removePartialLine() {
   }
 }
 
-// --- Coaching ---
-function appendCoaching(text) {
-  clearPlaceholder(coachingEl);
+// --- Coaching (Nano) ---
+function appendCoachingNano(text) {
+  coachingNanoPanel.classList.remove("hidden");
+  clearPlaceholder(coachingNanoEl);
   const card = document.createElement("div");
   card.className = "coaching-card";
-  card.innerHTML = `<div class="label">Suggestion</div><div>${escapeHtml(text)}</div>`;
-  coachingEl.insertBefore(card, coachingEl.firstChild);
+  card.innerHTML = `<div class="label">Quick Coach</div><div>${escapeHtml(text)}</div>`;
+  coachingNanoEl.insertBefore(card, coachingNanoEl.firstChild);
+}
+
+// --- Coaching (Opus) ---
+function appendCoachingOpus(text) {
+  coachingOpusPanel.classList.remove("hidden");
+  clearPlaceholder(coachingOpusEl);
+  const card = document.createElement("div");
+  card.className = "coaching-card summary-card";
+  card.innerHTML = `<div class="label">Deep Coach</div><div class="context-rendered">${renderMarkdown(text)}</div>`;
+  coachingOpusEl.insertBefore(card, coachingOpusEl.firstChild);
 }
 
 // --- Action Items ---
@@ -171,7 +310,6 @@ async function stopRecording() {
     return;
   }
 
-  // Remove any lingering partial transcript on stop
   removePartialLine();
   setRecordingUI(false);
   stopTimer();
@@ -218,19 +356,64 @@ async function save() {
   alert(`Saved to: ${data.path}`);
 }
 
+// --- Coach (Nano — on-demand) ---
+async function coachNano() {
+  btnCoachNano.disabled = true;
+  btnCoachNano.textContent = "Thinking...";
+  try {
+    const resp = await fetch("/api/coach", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "No recent transcript");
+      return;
+    }
+    // Result pushed via WebSocket as coaching_nano
+  } finally {
+    btnCoachNano.disabled = false;
+    btnCoachNano.textContent = "Quick Coach";
+  }
+}
+
+// --- Coach (Opus — on-demand) ---
+async function coachOpus() {
+  btnCoachOpus.disabled = true;
+  btnCoachOpus.textContent = "Thinking...";
+  try {
+    const resp = await fetch("/api/coach/opus", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "Deep coaching unavailable");
+      return;
+    }
+    // Result pushed via WebSocket as coaching_opus
+  } finally {
+    btnCoachOpus.disabled = false;
+    btnCoachOpus.textContent = "Deep Coach";
+  }
+}
+
+// --- Coach (Both — fire Nano + Opus in parallel) ---
+async function coachBoth() {
+  coachNano();
+  coachOpus();
+}
+
 // --- Summary ---
 function showSummary(markdown) {
-  clearPlaceholder(coachingEl);
+  clearPlaceholder(coachingNanoEl);
   const card = document.createElement("div");
   card.className = "coaching-card summary-card";
-  card.innerHTML = `<div class="label">Summary</div><pre class="summary-text">${escapeHtml(markdown)}</pre>`;
-  coachingEl.insertBefore(card, coachingEl.firstChild);
+  card.innerHTML = `<div class="label">Summary</div><div class="context-rendered">${renderMarkdown(markdown)}</div>`;
+  coachingNanoEl.insertBefore(card, coachingNanoEl.firstChild);
 }
 
 // --- UI helpers ---
 function setRecordingUI(recording) {
   btnStart.disabled = recording;
   btnStop.disabled = !recording;
+  btnCoachNano.disabled = !recording;
+  btnCoachOpus.disabled = !recording;
+  btnCoachBoth.disabled = !recording;
   btnSummarize.disabled = recording;
   btnSave.disabled = recording;
 
@@ -259,7 +442,7 @@ function appendError(text) {
   clearPlaceholder(transcriptEl);
   const line = document.createElement("div");
   line.className = "transcript-line error-line";
-  line.innerHTML = `<span class="timestamp" style="color:#e94560">ERROR</span><span class="text" style="color:#e94560">${escapeHtml(text)}</span>`;
+  line.innerHTML = `<span class="timestamp">ERROR</span><span class="text">${escapeHtml(text)}</span>`;
   transcriptEl.appendChild(line);
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
@@ -296,7 +479,6 @@ async function uploadContextFiles(files) {
       alert(`Upload error: ${e.message}`);
     }
   }
-  // Reset input so same file can be re-selected
   document.getElementById("context-file").value = "";
 }
 
@@ -312,7 +494,7 @@ function appendContext(filename, text) {
   clearPlaceholder(contextListEl);
   const card = document.createElement("div");
   card.className = "context-card";
-  card.innerHTML = `<div class="context-filename">${escapeHtml(filename)}</div><pre class="context-text">${escapeHtml(text)}</pre>`;
+  card.innerHTML = `<div class="context-filename">${escapeHtml(filename)}</div><div class="context-rendered">${renderMarkdown(text)}</div>`;
   contextListEl.appendChild(card);
 }
 
