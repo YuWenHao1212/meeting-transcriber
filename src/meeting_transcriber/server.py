@@ -554,10 +554,9 @@ def create_app(
 
   @app.post("/api/coach")
   async def coach_me() -> JSONResponse:
-    """On-demand coaching: analyze recent transcript against playbook."""
-    from meeting_transcriber.prompter import generate_coaching_strategy, load_context
+    """Quick coaching via Anthropic Sonnet."""
+    from meeting_transcriber.coach import run_quick_coaching
 
-    # Grab last ~10 seconds of transcript (last few chunks)
     recent = session["transcript_chunks"][-5:] if session["transcript_chunks"] else []
     recent_text = "\n".join(recent)
     if not recent_text.strip():
@@ -566,24 +565,19 @@ def create_app(
         status_code=400,
       )
 
-    # Load context chunks if not already loaded
-    if not session.get("context_chunks") and session.get("context_paths"):
-      session["context_chunks"] = load_context(session["context_paths"])
-
-    # Also use raw context text for the LLM
     playbook_text = "\n\n".join(session["context"]) if session["context"] else ""
 
-    strategy = generate_coaching_strategy(recent_text, playbook_text)
+    def on_result(text: str) -> None:
+      session["_ws_queue"].append({"type": "coaching_nano", "text": text})
 
-    # Queue to WebSocket
-    session["_ws_queue"].append({"type": "coaching_nano", "text": strategy})
+    run_quick_coaching(recent_text, playbook_text, on_result)
 
-    return JSONResponse({"strategy": strategy, "source": "nano"})
+    return JSONResponse({"status": "processing", "source": "sonnet"})
 
   @app.post("/api/coach/opus")
   async def coach_opus() -> JSONResponse:
-    """On-demand deep coaching via Claude Code CLI (Opus)."""
-    from meeting_transcriber.opus_coach import run_opus_coaching
+    """Deep coaching via Anthropic Opus."""
+    from meeting_transcriber.coach import run_deep_coaching
 
     recent = session["transcript_chunks"][-10:] if session["transcript_chunks"] else []
     recent_text = "\n".join(recent)
@@ -598,7 +592,7 @@ def create_app(
     def on_result(text: str) -> None:
       session["_ws_queue"].append({"type": "coaching_opus", "text": text})
 
-    run_opus_coaching(recent_text, playbook_text, on_result)
+    run_deep_coaching(recent_text, playbook_text, on_result)
 
     return JSONResponse({"status": "processing", "source": "opus"})
 
