@@ -20,14 +20,14 @@ class TestStereoSplitting:
     frames = 160
     bh_ch1 = np.full(frames, -0.3, dtype=np.float32)  # BlackHole Ch1 (對方)
     bh_ch2 = np.full(frames, -0.3, dtype=np.float32)  # BlackHole Ch2 (unused)
-    mic_ch3 = np.full(frames, 0.5, dtype=np.float32)   # Mic (我方)
+    mic_ch3 = np.full(frames, 0.5, dtype=np.float32)  # Mic (我方)
     indata = np.column_stack([bh_ch1, bh_ch2, mic_ch3])
 
     assert indata.shape == (frames, 3)
 
     # Split channels (same logic as audio_callback in stereo mode)
     theirs = indata[:, 0]  # BlackHole Ch1
-    mine = indata[:, 2]    # Mic
+    mine = indata[:, 2]  # Mic
     pcm_theirs = (theirs * 32767).astype(np.int16).tobytes()
     pcm_mine = (mine * 32767).astype(np.int16).tobytes()
 

@@ -48,7 +48,9 @@ def _get_current_output() -> str | None:
   try:
     result = subprocess.run(
       ["SwitchAudioSource", "-c", "-t", "output"],
-      capture_output=True, text=True, timeout=5,
+      capture_output=True,
+      text=True,
+      timeout=5,
     )
     return result.stdout.strip() if result.returncode == 0 else None
   except Exception:
@@ -62,7 +64,9 @@ def _set_output_device(name: str) -> bool:
   try:
     result = subprocess.run(
       ["SwitchAudioSource", "-s", name, "-t", "output"],
-      capture_output=True, text=True, timeout=5,
+      capture_output=True,
+      text=True,
+      timeout=5,
     )
     return result.returncode == 0
   except Exception:
@@ -168,6 +172,7 @@ def _recording_loop(
 
 def _make_on_partial(session: dict[str, Any], speaker: str | None = None) -> callable:
   """Create an on_partial callback, optionally tagged with a speaker label."""
+
   def on_partial(text: str) -> None:
     msg: dict[str, Any] = {
       "type": "transcript_partial",
@@ -176,11 +181,13 @@ def _make_on_partial(session: dict[str, Any], speaker: str | None = None) -> cal
     if speaker:
       msg["speaker"] = speaker
     session["_ws_queue"].append(msg)
+
   return on_partial
 
 
 def _make_on_final(session: dict[str, Any], speaker: str | None = None) -> callable:
   """Create an on_final callback, optionally tagged with a speaker label."""
+
   def on_final(text: str) -> None:
     elapsed = _elapsed(session)
     mm = int(elapsed) // 60
@@ -217,13 +224,16 @@ def _make_on_final(session: dict[str, Any], speaker: str | None = None) -> calla
         f.write(f"[{timestamp_str}]{prefix} {text}\n")
     except Exception:
       pass
+
   return on_final
 
 
 def _make_on_error(session: dict[str, Any]) -> callable:
   """Create an on_error callback."""
+
   def on_error(text: str) -> None:
     session["_ws_queue"].append({"type": "error", "text": text})
+
   return on_error
 
 
@@ -253,10 +263,12 @@ def _recording_loop_realtime(
           aggregate_dev = i
           break
     if aggregate_dev is None:
-      session["_ws_queue"].append({
-        "type": "error",
-        "text": "找不到聚合裝置（需要至少 3 個輸入通道）。請在 Audio MIDI Setup 建立聚合裝置。",
-      })
+      session["_ws_queue"].append(
+        {
+          "type": "error",
+          "text": "找不到聚合裝置（需要至少 3 個輸入通道）。請在 Audio MIDI Setup 建立聚合裝置。",
+        }
+      )
       return
 
     # Two streamers: mic (我方) and system audio (對方)
@@ -297,7 +309,7 @@ def _recording_loop_realtime(
     ) -> None:
       # indata shape: (frames, 3) — Ch1-2 = BlackHole (對方), Ch3 = mic (我方)
       theirs = indata[:, 0]  # BlackHole Ch1 (mono is enough for ASR)
-      mine = indata[:, 2]    # Built-in mic
+      mine = indata[:, 2]  # Built-in mic
       pcm_mine = (mine * 32767).astype(np.int16).tobytes()
       pcm_theirs = (theirs * 32767).astype(np.int16).tobytes()
       with buffer_lock:
@@ -645,11 +657,13 @@ def create_app(
         ok = _set_output_device(_MULTI_OUTPUT_DEVICE)
         if not ok:
           return JSONResponse(
-            {"error": (
-              f"無法切換系統輸出到「{_MULTI_OUTPUT_DEVICE}」，"
-              "請確認 Audio MIDI Setup 已建立多重輸出裝置，"
-              "並已安裝 SwitchAudioSource (brew install switchaudio-osx)"
-            )},
+            {
+              "error": (
+                f"無法切換系統輸出到「{_MULTI_OUTPUT_DEVICE}」，"
+                "請確認 Audio MIDI Setup 已建立多重輸出裝置，"
+                "並已安裝 SwitchAudioSource (brew install switchaudio-osx)"
+              )
+            },
             status_code=500,
           )
 
@@ -759,8 +773,10 @@ def create_app(
         thread = threading.Thread(
           target=_recording_loop,
           args=(
-            session, app.state.engine_name,
-            app.state.language, app.state.chunk_duration,
+            session,
+            app.state.engine_name,
+            app.state.language,
+            app.state.chunk_duration,
           ),
           daemon=True,
         )
