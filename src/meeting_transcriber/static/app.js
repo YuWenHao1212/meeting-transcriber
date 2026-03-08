@@ -57,6 +57,9 @@ function handleMessage(msg) {
     case "cost":
       updateCost(msg.value || 0);
       break;
+    case "summary":
+      showSummary(msg.text || "");
+      break;
     case "status":
       // Status update from server
       break;
@@ -143,14 +146,24 @@ async function stopRecording() {
 }
 
 async function summarize() {
-  const resp = await fetch("/api/summarize", { method: "POST" });
-  if (!resp.ok) {
-    const err = await resp.json();
-    alert(err.error || "Nothing to summarize");
-    return;
+  btnSummarize.disabled = true;
+  btnSummarize.textContent = "Summarizing...";
+  try {
+    const resp = await fetch("/api/summarize", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "Nothing to summarize");
+      return;
+    }
+    const data = await resp.json();
+    showSummary(data.summary);
+    if (data.action_items && data.action_items.length > 0) {
+      data.action_items.forEach((item) => appendActionItem(item));
+    }
+  } finally {
+    btnSummarize.disabled = false;
+    btnSummarize.textContent = "Summarize";
   }
-  const data = await resp.json();
-  appendCoaching(`Summary: ${data.summary}`);
 }
 
 async function save() {
@@ -171,6 +184,15 @@ async function save() {
 
   const data = await resp.json();
   alert(`Saved to: ${data.path}`);
+}
+
+// --- Summary ---
+function showSummary(markdown) {
+  clearPlaceholder(coachingEl);
+  const card = document.createElement("div");
+  card.className = "coaching-card summary-card";
+  card.innerHTML = `<div class="label">Summary</div><pre class="summary-text">${escapeHtml(markdown)}</pre>`;
+  coachingEl.insertBefore(card, coachingEl.firstChild);
 }
 
 // --- UI helpers ---

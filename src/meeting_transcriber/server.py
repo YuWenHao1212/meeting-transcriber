@@ -30,9 +30,12 @@ def _new_session() -> dict[str, Any]:
     "active": False,
     "start_time": None,
     "context": [],
+    "context_paths": [],
+    "context_chunks": [],
     "transcript_chunks": [],
     "action_items": [],
     "total_cost": 0.0,
+    "summary": None,
     "ws_clients": set(),
     "_ws_queue": [],
     "_thread": None,
@@ -87,6 +90,7 @@ def _recording_loop(
       chunks = chunk_audio(audio_path, chunk_duration=chunk_duration, overlap=2)
       _transcribe_new_chunks(
         session, engine, chunks, chunk_index, chunk_duration, language,
+        context_chunks=session.get("context_chunks", []),
       )
       chunk_index = len(chunks)
     except Exception as e:
@@ -100,6 +104,7 @@ def _transcribe_new_chunks(
   chunk_index: int,
   chunk_duration: int,
   language: str,
+  context_chunks: list | None = None,
 ) -> None:
   """Transcribe chunks from chunk_index onward and queue WS messages."""
   for i in range(chunk_index, len(chunks)):
@@ -121,6 +126,112 @@ def _transcribe_new_chunks(
       "value": session["total_cost"],
     })
 
+    # Run coaching prompt pipeline
+    _run_prompter(session, result.full_text, context_chunks or [])
+
+
+def _load_session_context_chunks(session: dict[str, Any]) -> None:
+  """Load structured context chunks from session's context_paths."""
+  if not session["context_paths"]:
+    return
+  from meeting_transcriber.prompter import load_context
+  session["context_chunks"] = load_context(session["context_paths"])
+
+
+def _run_prompter(
+  session: dict[str, Any],
+  transcript_text: str,
+  context_chunks: list,
+) -> None:
+  """Run coaching prompt pipeline on transcript text.
+
+  Detects questions, matches context, generates prompt cards,
+  and detects action items. Errors are logged but never propagated.
+  """
+  from meeting_transcriber.prompter import (
+    detect_action_items,
+    detect_questions,
+    generate_prompt_card,
+    match_context,
+  )
+
+  try:
+    questions = detect_questions(transcript_text)
+    for question in questions:
+      matches = match_context(question.keywords, context_chunks)
+      card_text = generate_prompt_card(question, matches)
+      session["_ws_queue"].append({
+        "type": "coaching",
+        "text": card_text,
+      })
+  except Exception:
+    pass  # detect_questions already handles errors internally
+
+  try:
+    items = detect_action_items(transcript_text)
+    for item in items:
+      session["action_items"].append({
+        "text": item.text,
+        "owner": item.owner,
+        "deadline": item.deadline,
+      })
+      session["_ws_queue"].append({
+        "type": "action_item",
+        "text": item.text,
+        "owner": item.owner,
+        "deadline": item.deadline,
+      })
+  except Exception:
+    pass  # detect_action_items already handles errors internally
+
+
+def _build_meeting_markdown(
+  session: dict[str, Any],
+  engine_name: str,
+) -> str:
+  """Build complete meeting notes as a markdown document."""
+  now = datetime.now()
+  lines = [
+    "# Meeting Notes",
+    "",
+    "## Metadata",
+    f"- **Date**: {now.strftime('%Y-%m-%d %H:%M')}",
+    f"- **Engine**: {engine_name}",
+    f"- **Cost**: ${session['total_cost']:.4f}",
+    "",
+  ]
+
+  # Playbook coverage (context)
+  if session["context"]:
+    lines.append("## Playbook")
+    lines.append("")
+    lines.append("\n\n".join(session["context"]))
+    lines.append("")
+
+  # Summary
+  if session.get("summary"):
+    lines.append(session["summary"])
+    lines.append("")
+
+  # Action items
+  if session["action_items"]:
+    lines.append("## Action Items")
+    lines.append("")
+    for item in session["action_items"]:
+      if isinstance(item, dict):
+        lines.append(f"- [ ] {item['text']}")
+      else:
+        lines.append(f"- [ ] {item}")
+    lines.append("")
+
+  # Full transcript
+  lines.append("## Transcript")
+  lines.append("")
+  lines.append("\n".join(session["transcript_chunks"]))
+  lines.append("")
+
+  return "\n".join(lines)
+
 
 def create_app(
   context_paths: list[str] | None = None,
@@ -135,6 +246,7 @@ def create_app(
   # Pre-load context if provided via CLI
   if context_paths:
     session["context"] = _load_context_files(context_paths)
+    session["context_paths"] = list(context_paths)
 
   # Store config on app state for access in routes
   app.state.engine_name = engine_name
@@ -168,6 +280,10 @@ def create_app(
     if body and body.context_paths:
       extra = _load_context_files(body.context_paths)
       session["context"] = session["context"] + extra
+      session["context_paths"] = session["context_paths"] + list(body.context_paths)
+
+    # Load structured context chunks for coaching prompt engine
+    _load_session_context_chunks(session)
 
     # Push context to WebSocket clients
     _queue_context(session)
@@ -215,14 +331,26 @@ def create_app(
 
   @app.post("/api/summarize")
   async def summarize_session() -> JSONResponse:
+    from meeting_transcriber.summarizer import summarize
+
     text = "\n".join(session["transcript_chunks"])
     if not text:
       return JSONResponse(
         {"error": "No transcript to summarize"},
         status_code=400,
       )
+
+    # Build playbook from context if available
+    playbook_text = "\n\n".join(session["context"]) if session["context"] else None
+
+    summary_md = summarize(text, playbook=playbook_text)
+    session["summary"] = summary_md
+
+    # Queue summary to WebSocket clients
+    session["_ws_queue"].append({"type": "summary", "text": summary_md})
+
     return JSONResponse({
-      "summary": f"Summary of {len(session['transcript_chunks'])} chunks",
+      "summary": summary_md,
       "action_items": session["action_items"],
     })
 
@@ -234,10 +362,29 @@ def create_app(
         {"error": "No transcript to save"},
         status_code=400,
       )
+
+    md = _build_meeting_markdown(session, app.state.engine_name)
     out = Path(body.output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(text, encoding="utf-8")
+    out.write_text(md, encoding="utf-8")
     return JSONResponse({"path": str(out)})
+
+  @app.post("/api/export")
+  async def export_notes() -> JSONResponse:
+    text = "\n".join(session["transcript_chunks"])
+    if not text:
+      return JSONResponse(
+        {"error": "No transcript to export"},
+        status_code=400,
+      )
+
+    md = _build_meeting_markdown(session, app.state.engine_name)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"meeting-{timestamp}.md"
+    return JSONResponse({
+      "markdown": md,
+      "suggested_filename": filename,
+    })
 
   @app.websocket("/ws")
   async def websocket_endpoint(ws: WebSocket) -> None:

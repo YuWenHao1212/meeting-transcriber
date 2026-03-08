@@ -10,6 +10,7 @@ from meeting_transcriber.server import (
   _new_session,
   _queue_context,
   _recording_loop,
+  _run_prompter,
   _transcribe_new_chunks,
 )
 
@@ -46,7 +47,8 @@ class TestQueueContext:
 
 
 class TestTranscribeNewChunks:
-  def test_transcribes_and_queues(self, session):
+  @patch("meeting_transcriber.server._run_prompter")
+  def test_transcribes_and_queues(self, mock_prompter, session):
     mock_engine = MagicMock()
     mock_engine.transcribe_file.return_value = TranscriptResult(
       full_text="Hello world",
@@ -68,7 +70,8 @@ class TestTranscribeNewChunks:
     assert session["_ws_queue"][1]["type"] == "cost"
     assert session["_ws_queue"][2]["timestamp"] == "00:30"
 
-  def test_skips_already_processed_chunks(self, session):
+  @patch("meeting_transcriber.server._run_prompter")
+  def test_skips_already_processed_chunks(self, mock_prompter, session):
     mock_engine = MagicMock()
     mock_engine.transcribe_file.return_value = TranscriptResult(
       full_text="new chunk",
@@ -85,7 +88,8 @@ class TestTranscribeNewChunks:
     assert len(session["transcript_chunks"]) == 1
     assert session["_ws_queue"][0]["timestamp"] == "01:00"
 
-  def test_timestamp_format(self, session):
+  @patch("meeting_transcriber.server._run_prompter")
+  def test_timestamp_format(self, mock_prompter, session):
     mock_engine = MagicMock()
     mock_engine.transcribe_file.return_value = TranscriptResult(
       full_text="text", duration=30.0, cost=0.0, engine="mock",
@@ -286,3 +290,194 @@ class TestWebSocketBroadcast:
       context_msgs = [m for m in session["_ws_queue"] if m["type"] == "context"]
       assert len(context_msgs) == 1
       assert "Agenda" in context_msgs[0]["text"]
+
+
+class TestCoachingMessages:
+  """Verify coaching messages are queued after transcription."""
+
+  @patch("meeting_transcriber.prompter.detect_action_items", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_questions")
+  def test_coaching_messages_queued(self, mock_detect_q, mock_detect_ai, session):
+    from meeting_transcriber.prompter import ContextChunk, DetectedQuestion
+
+    mock_detect_q.return_value = [
+      DetectedQuestion(question="What is the timeline?", keywords=["timeline"]),
+    ]
+    context_chunks = [
+      ContextChunk(text="Project timeline is Q2", source="plan.md", keywords=["timeline"]),
+    ]
+
+    _run_prompter(session, "What is the timeline?", context_chunks)
+
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    assert len(coaching_msgs) == 1
+    assert "What is the timeline?" in coaching_msgs[0]["text"]
+    assert "plan.md" in coaching_msgs[0]["text"]
+
+  @patch("meeting_transcriber.prompter.detect_action_items", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_questions")
+  def test_multiple_questions_produce_multiple_cards(
+    self, mock_detect_q, mock_detect_ai, session,
+  ):
+    from meeting_transcriber.prompter import DetectedQuestion
+
+    mock_detect_q.return_value = [
+      DetectedQuestion(question="Q1?", keywords=["a"]),
+      DetectedQuestion(question="Q2?", keywords=["b"]),
+    ]
+
+    _run_prompter(session, "some transcript", [])
+
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    assert len(coaching_msgs) == 2
+
+
+class TestActionItemMessages:
+  """Verify action items are queued after transcription."""
+
+  @patch("meeting_transcriber.prompter.detect_questions", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_action_items")
+  def test_action_items_queued(self, mock_detect_ai, mock_detect_q, session):
+    from meeting_transcriber.prompter import ActionItem
+
+    mock_detect_ai.return_value = [
+      ActionItem(text="Send report", owner="Alice", deadline="Friday"),
+    ]
+
+    _run_prompter(session, "Alice will send the report by Friday", [])
+
+    ai_msgs = [m for m in session["_ws_queue"] if m["type"] == "action_item"]
+    assert len(ai_msgs) == 1
+    assert ai_msgs[0]["text"] == "Send report"
+    assert ai_msgs[0]["owner"] == "Alice"
+    assert ai_msgs[0]["deadline"] == "Friday"
+
+  @patch("meeting_transcriber.prompter.detect_questions", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_action_items")
+  def test_action_items_stored_in_session(self, mock_detect_ai, mock_detect_q, session):
+    from meeting_transcriber.prompter import ActionItem
+
+    mock_detect_ai.return_value = [
+      ActionItem(text="Review PR", owner=None, deadline=None),
+    ]
+
+    _run_prompter(session, "We need to review the PR", [])
+
+    assert len(session["action_items"]) == 1
+    assert session["action_items"][0]["text"] == "Review PR"
+    assert session["action_items"][0]["owner"] is None
+
+  @patch("meeting_transcriber.prompter.detect_questions", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_action_items")
+  def test_multiple_action_items(self, mock_detect_ai, mock_detect_q, session):
+    from meeting_transcriber.prompter import ActionItem
+
+    mock_detect_ai.return_value = [
+      ActionItem(text="Task 1", owner="A", deadline=None),
+      ActionItem(text="Task 2", owner="B", deadline="Monday"),
+    ]
+
+    _run_prompter(session, "transcript", [])
+
+    ai_msgs = [m for m in session["_ws_queue"] if m["type"] == "action_item"]
+    assert len(ai_msgs) == 2
+    assert len(session["action_items"]) == 2
+
+
+class TestCoachingWithoutContext:
+  """Coaching still works when no context is loaded."""
+
+  @patch("meeting_transcriber.prompter.detect_action_items", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_questions")
+  def test_no_context_still_produces_cards(self, mock_detect_q, mock_detect_ai, session):
+    from meeting_transcriber.prompter import DetectedQuestion
+
+    mock_detect_q.return_value = [
+      DetectedQuestion(question="What about pricing?", keywords=["pricing"]),
+    ]
+
+    _run_prompter(session, "What about pricing?", [])
+
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    assert len(coaching_msgs) == 1
+    # Card should indicate no matching context
+    assert "No matching context found" in coaching_msgs[0]["text"]
+
+  @patch("meeting_transcriber.prompter.detect_action_items", return_value=[])
+  @patch("meeting_transcriber.prompter.detect_questions", return_value=[])
+  def test_no_questions_no_coaching(self, mock_detect_q, mock_detect_ai, session):
+    _run_prompter(session, "Just chatting", [])
+
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    assert len(coaching_msgs) == 0
+
+
+class TestPrompterErrorResilience:
+  """Prompter errors don't crash the streaming loop."""
+
+  @patch("meeting_transcriber.prompter.detect_action_items", return_value=[])
+  @patch(
+    "meeting_transcriber.prompter.detect_questions",
+    side_effect=RuntimeError("API down"),
+  )
+  def test_detect_questions_error_does_not_crash(
+    self, mock_detect_q, mock_detect_ai, session,
+  ):
+    # Should not raise
+    _run_prompter(session, "some text", [])
+
+    # No coaching messages, but no crash
+    coaching_msgs = [m for m in session["_ws_queue"] if m["type"] == "coaching"]
+    assert len(coaching_msgs) == 0
+
+  @patch(
+    "meeting_transcriber.prompter.detect_action_items",
+    side_effect=RuntimeError("API down"),
+  )
+  @patch("meeting_transcriber.prompter.detect_questions", return_value=[])
+  def test_detect_action_items_error_does_not_crash(
+    self, mock_detect_q, mock_detect_ai, session,
+  ):
+    # Should not raise
+    _run_prompter(session, "some text", [])
+
+    ai_msgs = [m for m in session["_ws_queue"] if m["type"] == "action_item"]
+    assert len(ai_msgs) == 0
+
+  @patch(
+    "meeting_transcriber.prompter.detect_action_items",
+    side_effect=RuntimeError("API down"),
+  )
+  @patch(
+    "meeting_transcriber.prompter.detect_questions",
+    side_effect=RuntimeError("API down"),
+  )
+  def test_both_fail_does_not_crash(self, mock_detect_q, mock_detect_ai, session):
+    # Should not raise even when both fail
+    _run_prompter(session, "some text", [])
+    assert session["_ws_queue"] == []
+
+  def test_transcribe_with_prompter_error_still_queues_transcript(self, session):
+    """Even if prompter fails, transcript + cost messages still appear."""
+    mock_engine = MagicMock()
+    mock_engine.transcribe_file.return_value = TranscriptResult(
+      full_text="Hello",
+      duration=30.0,
+      cost=0.01,
+      engine="mock",
+    )
+
+    with patch(
+      "meeting_transcriber.prompter.detect_questions",
+      side_effect=RuntimeError("fail"),
+    ), patch(
+      "meeting_transcriber.prompter.detect_action_items",
+      side_effect=RuntimeError("fail"),
+    ):
+      chunks = [Path("/tmp/c0.wav")]
+      _transcribe_new_chunks(session, mock_engine, chunks, 0, 30, "zh")
+
+    assert len(session["transcript_chunks"]) == 1
+    transcript_msgs = [m for m in session["_ws_queue"] if m["type"] == "transcript"]
+    assert len(transcript_msgs) == 1
+    assert transcript_msgs[0]["text"] == "Hello"

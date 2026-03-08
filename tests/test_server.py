@@ -1,5 +1,7 @@
 """Tests for the FastAPI web server."""
 
+from unittest.mock import patch
+
 from starlette.testclient import TestClient
 
 from meeting_transcriber.server import create_app
@@ -94,13 +96,15 @@ class TestSummarize:
     resp = client.post("/api/summarize")
     assert resp.status_code == 400
 
-  def test_summarize_with_transcript(self):
+  @patch("meeting_transcriber.summarizer.summarize", return_value="Mock summary")
+  def test_summarize_with_transcript(self, mock_summarize):
     app = create_app()
     app.state.session["transcript_chunks"] = ["chunk one", "chunk two"]
     client = TestClient(app)
     resp = client.post("/api/summarize")
     assert resp.status_code == 200
     assert "summary" in resp.json()
+    assert resp.json()["summary"] == "Mock summary"
 
 
 class TestSave:
