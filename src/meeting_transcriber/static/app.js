@@ -248,6 +248,12 @@ function appendCoachingNano(text) {
   coachingNanoEl.insertBefore(card, coachingNanoEl.firstChild);
 }
 
+// --- Toggle coaching panels ---
+function togglePanel(which) {
+  const panel = which === "nano" ? coachingNanoPanel : coachingOpusPanel;
+  panel.classList.toggle("hidden");
+}
+
 // --- Coaching (Opus) ---
 function appendCoachingOpus(text) {
   coachingOpusPanel.classList.remove("hidden");

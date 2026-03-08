@@ -112,7 +112,7 @@ header h1 {
 .grid {
   flex: 1;
   display: grid;
-  grid-template-columns: 2fr 1.5fr 1fr;
+  grid-template-columns: 2fr 1fr 1.5fr;
   gap: 1px;
   background: var(--cream-300);
   overflow: hidden;
@@ -560,6 +560,24 @@ footer {
 
 .coaching-sub.hidden {
   display: none;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: var(--ink-300);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 4px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.toggle-btn:hover {
+  color: var(--red);
+  background: rgba(199, 84, 97, 0.08);
 }
 
 /* --- Responsive --- */
