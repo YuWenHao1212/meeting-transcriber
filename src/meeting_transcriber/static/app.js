@@ -206,6 +206,10 @@ function handleMessage(msg) {
 
 // --- Transcript ---
 function appendTranscript(timestamp, text) {
+  hasTranscript = true;
+  btnCoachNano.disabled = false;
+  btnCoachOpus.disabled = false;
+  btnCoachBoth.disabled = false;
   clearPlaceholder(transcriptEl);
   removePartialLine();
   const line = document.createElement("div");
@@ -408,12 +412,16 @@ function showSummary(markdown) {
 }
 
 // --- UI helpers ---
+let hasTranscript = false;
+
 function setRecordingUI(recording) {
   btnStart.disabled = recording;
   btnStop.disabled = !recording;
-  btnCoachNano.disabled = !recording;
-  btnCoachOpus.disabled = !recording;
-  btnCoachBoth.disabled = !recording;
+  // Coach buttons: enabled when recording OR when transcript exists from a previous session
+  const coachEnabled = recording || hasTranscript;
+  btnCoachNano.disabled = !coachEnabled;
+  btnCoachOpus.disabled = !coachEnabled;
+  btnCoachBoth.disabled = !coachEnabled;
   btnSummarize.disabled = recording;
   btnSave.disabled = recording;
 
