@@ -349,10 +349,12 @@ def create_app(
         status_code=400,
       )
     session["context"].append(content)
-    return JSONResponse({
-      "filename": file.filename,
-      "length": len(content),
-    })
+    return JSONResponse(
+      {
+        "filename": file.filename,
+        "length": len(content),
+      }
+    )
 
   @app.get("/api/status")
   async def get_status() -> JSONResponse:
