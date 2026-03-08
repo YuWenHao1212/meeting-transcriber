@@ -240,14 +240,21 @@ async function uploadContextFiles(files) {
       });
 
       if (!resp.ok) {
-        const err = await resp.json();
-        alert(err.error || "Upload failed");
+        const text = await resp.text();
+        console.error("Upload failed:", resp.status, text);
+        try {
+          const err = JSON.parse(text);
+          alert(err.detail || err.error || `Upload failed (${resp.status})`);
+        } catch {
+          alert(`Upload failed (${resp.status})`);
+        }
         continue;
       }
 
       const data = await resp.json();
       appendContext(file.name, await readFileText(file));
     } catch (e) {
+      console.error("Upload error:", e);
       alert(`Upload error: ${e.message}`);
     }
   }
