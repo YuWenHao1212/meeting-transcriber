@@ -32,6 +32,10 @@
       <div id="context-list" class="scroll-area">
         <p class="placeholder">No context loaded. Click + to upload a playbook.</p>
       </div>
+      <div id="summary-section" class="hidden">
+        <h2>Summary</h2>
+        <textarea id="summary-editor" class="summary-editor" placeholder="Summary will appear here after clicking Summarize..."></textarea>
+      </div>
     </section>
 
     <section class="panel panel-transcript">
@@ -43,7 +47,7 @@
 
     <section class="panel panel-coaching">
       <div class="coaching-split">
-        <div class="coaching-sub" id="coaching-nano-panel">
+        <div class="coaching-sub hidden" id="coaching-nano-panel">
           <h2>Quick Coach <span class="coaching-tag tag-nano">Nano</span>
             <button class="toggle-btn" onclick="togglePanel('nano')" title="Hide panel">&times;</button>
           </h2>
@@ -65,11 +69,16 @@
 
   <footer>
     <div class="actions">
+      <label class="stereo-toggle" title="Stereo mode: split mic (our side) and system audio (other side)">
+        <input type="checkbox" id="chk-stereo">
+        <span class="stereo-label">Stereo</span>
+      </label>
+      <button class="btn btn-midi" onclick="openAudioMidi()" title="Open Audio MIDI Setup">🎛</button>
       <button id="btn-start" class="btn btn-start" onclick="startRecording()">Start</button>
       <button id="btn-stop" class="btn btn-stop" disabled onclick="stopRecording()">Stop</button>
-      <button id="btn-coach-nano" class="btn btn-coach-nano" disabled onclick="coachNano()">Quick Coach</button>
+      <button id="btn-coach-nano" class="btn btn-coach-nano hidden" disabled onclick="coachNano()">Quick Coach</button>
       <button id="btn-coach-opus" class="btn btn-coach-opus" disabled onclick="coachOpus()">Deep Coach</button>
-      <button id="btn-coach-both" class="btn btn-coach-both" disabled onclick="coachBoth()">Both</button>
+      <button id="btn-coach-both" class="btn btn-coach-both hidden" disabled onclick="coachBoth()">Both</button>
       <button id="btn-summarize" class="btn btn-secondary" disabled onclick="summarize()">Summarize</button>
       <button id="btn-save" class="btn btn-secondary" disabled onclick="save()">Save</button>
     </div>

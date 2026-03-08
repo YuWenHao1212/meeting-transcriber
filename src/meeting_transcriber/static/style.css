@@ -354,6 +354,93 @@ header h1 {
   color: var(--ink-300);
 }
 
+/* Speaker badges (stereo mode) */
+.speaker-badge {
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.speaker-mine {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.speaker-theirs {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* Stereo toggle */
+.stereo-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  margin-right: 8px;
+}
+
+.stereo-toggle input[type="checkbox"] {
+  accent-color: var(--blue, #3b82f6);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.stereo-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-300, #888);
+}
+
+.stereo-toggle input:checked ~ .stereo-label {
+  color: var(--blue, #3b82f6);
+}
+
+/* Summary editor */
+#summary-section {
+  border-top: 1px solid var(--cream-300, #ddd);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+#summary-section h2 {
+  margin-bottom: 6px;
+}
+
+.summary-editor {
+  width: 100%;
+  min-height: 200px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  border: 1px solid var(--cream-400, #ddd);
+  border-radius: 4px;
+  background: var(--cream-50, #fff);
+  color: var(--ink-700, #333);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.btn-midi {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  background: var(--cream-200, #f0f0f0);
+  border: 1px solid var(--cream-400, #ddd);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  line-height: 1;
+}
+
+.btn-midi:hover {
+  background: var(--cream-300, #e0e0e0);
+}
+
 /* Error lines */
 .error-line .timestamp,
 .error-line .text {
@@ -558,8 +645,8 @@ footer {
   color: var(--teal);
 }
 
-.coaching-sub.hidden {
-  display: none;
+.hidden {
+  display: none !important;
 }
 
 .toggle-btn {

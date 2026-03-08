@@ -80,6 +80,21 @@ def _build_user_message(
   return "\n\n---\n\n".join(parts)
 
 
+INCREMENTAL_SYSTEM = (
+  "You are an expert meeting note-taker performing an incremental update.\n\n"
+  "You are given:\n"
+  "1. The EXISTING summary from earlier in the meeting\n"
+  "2. NEW transcript segments that have not been summarized yet\n"
+  "3. Optionally, a pre-meeting playbook for context\n\n"
+  "Your task: produce an UPDATED summary that incorporates the new transcript.\n"
+  "- Merge new information into the existing structure (don't duplicate)\n"
+  "- Append new decisions, action items, discussions as needed\n"
+  "- Update the Playbook 覆蓋率 section if playbook is provided\n"
+  "- Output the COMPLETE updated summary (not just the diff)\n"
+  "- Output in markdown format, in Traditional Chinese (繁體中文)\n"
+)
+
+
 def summarize(
   transcript: str,
   playbook: str | None = None,
@@ -105,5 +120,43 @@ def summarize(
     messages=[
       {"role": "user", "content": _build_user_message(transcript, playbook=playbook)},
     ],
+  )
+  return response.content[0].text
+
+
+def summarize_incremental(
+  new_transcript: str,
+  existing_summary: str,
+  playbook: str | None = None,
+  model: str = DEFAULT_MODEL,
+) -> str:
+  """Incrementally update an existing summary with new transcript segments.
+
+  Args:
+    new_transcript: Only the new, unprocessed transcript text.
+    existing_summary: The previously generated summary.
+    playbook: Optional pre-meeting playbook for context.
+    model: Anthropic model to use.
+
+  Returns:
+    Updated markdown-formatted meeting summary string.
+  """
+  parts = []
+  if playbook:
+    parts.append(f"## Pre-Meeting Playbook\n\n{playbook}")
+  parts.append(f"## Existing Summary\n\n{existing_summary}")
+  parts.append(f"## New Transcript Segments\n\n{new_transcript}")
+  user_msg = "\n\n---\n\n".join(parts)
+
+  system = INCREMENTAL_SYSTEM
+  if playbook:
+    system += PLAYBOOK_COVERAGE_INSTRUCTIONS
+
+  client = anthropic.Anthropic()
+  response = client.messages.create(
+    model=model,
+    max_tokens=MAX_TOKENS,
+    system=system,
+    messages=[{"role": "user", "content": user_msg}],
   )
   return response.content[0].text

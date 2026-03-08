@@ -173,10 +173,10 @@ function connectWebSocket() {
 function handleMessage(msg) {
   switch (msg.type) {
     case "transcript":
-      appendTranscript(msg.timestamp || "", msg.text || "");
+      appendTranscript(msg.timestamp || "", msg.text || "", msg.speaker || "");
       break;
     case "transcript_partial":
-      updatePartialTranscript(msg.text || "");
+      updatePartialTranscript(msg.text || "", msg.speaker || "");
       break;
     case "coaching_nano":
       appendCoachingNano(msg.text || "");
@@ -205,7 +205,7 @@ function handleMessage(msg) {
 }
 
 // --- Transcript ---
-function appendTranscript(timestamp, text) {
+function appendTranscript(timestamp, text, speaker) {
   hasTranscript = true;
   btnCoachNano.disabled = false;
   btnCoachOpus.disabled = false;
@@ -214,12 +214,17 @@ function appendTranscript(timestamp, text) {
   removePartialLine();
   const line = document.createElement("div");
   line.className = "transcript-line";
-  line.innerHTML = `<span class="timestamp">${timestamp}</span><span class="text">${escapeHtml(text)}</span>`;
+  let speakerHtml = "";
+  if (speaker) {
+    const cls = speaker === "\u6211\u65b9" ? "speaker-mine" : "speaker-theirs";
+    speakerHtml = `<span class="speaker-badge ${cls}">${escapeHtml(speaker)}</span>`;
+  }
+  line.innerHTML = `<span class="timestamp">${timestamp}</span>${speakerHtml}<span class="text">${escapeHtml(text)}</span>`;
   transcriptEl.appendChild(line);
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
-function updatePartialTranscript(text) {
+function updatePartialTranscript(text, speaker) {
   clearPlaceholder(transcriptEl);
   let partial = transcriptEl.querySelector(".transcript-line-partial");
   if (!partial) {
@@ -227,7 +232,12 @@ function updatePartialTranscript(text) {
     partial.className = "transcript-line transcript-line-partial";
     transcriptEl.appendChild(partial);
   }
-  partial.innerHTML = `<span class="timestamp">...</span><span class="text">${escapeHtml(text)}</span>`;
+  let speakerHtml = "";
+  if (speaker) {
+    const cls = speaker === "\u6211\u65b9" ? "speaker-mine" : "speaker-theirs";
+    speakerHtml = `<span class="speaker-badge ${cls}">${escapeHtml(speaker)}</span>`;
+  }
+  partial.innerHTML = `<span class="timestamp">...</span>${speakerHtml}<span class="text">${escapeHtml(text)}</span>`;
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
@@ -294,12 +304,18 @@ function stopTimer() {
   timerInterval = null;
 }
 
+// --- Audio MIDI Setup ---
+async function openAudioMidi() {
+  await fetch("/api/open-audio-midi", { method: "POST" });
+}
+
 // --- Button handlers ---
 async function startRecording() {
+  const stereo = document.getElementById("chk-stereo").checked;
   const resp = await fetch("/api/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ context_paths: [] }),
+    body: JSON.stringify({ context_paths: [], stereo }),
   });
 
   if (!resp.ok) {
@@ -347,23 +363,21 @@ async function summarize() {
 }
 
 async function save() {
-  const path = prompt("Save path:", "meeting-notes.md");
-  if (!path) return;
-
-  const resp = await fetch("/api/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ output_path: path }),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.json();
-    alert(err.error || "Failed to save");
-    return;
+  btnSave.disabled = true;
+  btnSave.textContent = "Saving...";
+  try {
+    const resp = await fetch("/api/save", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "Failed to save");
+      return;
+    }
+    const data = await resp.json();
+    alert(`Saved to: ${data.path}`);
+  } finally {
+    btnSave.disabled = false;
+    btnSave.textContent = "Save";
   }
-
-  const data = await resp.json();
-  alert(`Saved to: ${data.path}`);
 }
 
 // --- Coach (Nano — on-demand) ---
@@ -410,11 +424,10 @@ async function coachBoth() {
 
 // --- Summary ---
 function showSummary(markdown) {
-  clearPlaceholder(coachingNanoEl);
-  const card = document.createElement("div");
-  card.className = "coaching-card summary-card";
-  card.innerHTML = `<div class="label">Summary</div><div class="context-rendered">${renderMarkdown(markdown)}</div>`;
-  coachingNanoEl.insertBefore(card, coachingNanoEl.firstChild);
+  const section = document.getElementById("summary-section");
+  const editor = document.getElementById("summary-editor");
+  section.classList.remove("hidden");
+  editor.value = markdown;
 }
 
 // --- UI helpers ---
