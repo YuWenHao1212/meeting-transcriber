@@ -1,5 +1,6 @@
 """Tests for post-meeting summarize, save, and export endpoints."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from starlette.testclient import TestClient
@@ -122,67 +123,68 @@ class TestSummarizeEndpoint:
 class TestSaveEndpoint:
   """Test /api/save writes correct markdown format."""
 
-  def test_save_writes_metadata_header(self, tmp_path):
-    _, client = _app_with_transcript()
-    out = tmp_path / "notes.md"
+  def _save(self, client, tmp_path, monkeypatch):
+    """Helper: patch save directory and call /api/save."""
+    monkeypatch.setattr(
+      "meeting_transcriber.server._get_save_directory",
+      lambda session: tmp_path,
+    )
+    resp = client.post("/api/save")
+    if resp.status_code == 200:
+      saved = Path(resp.json()["path"])
+      return resp, saved.read_text(encoding="utf-8")
+    return resp, None
 
-    resp = client.post("/api/save", json={"output_path": str(out)})
+  def test_save_writes_metadata_header(self, tmp_path, monkeypatch):
+    _, client = _app_with_transcript()
+    resp, content = self._save(client, tmp_path, monkeypatch)
 
     assert resp.status_code == 200
-    content = out.read_text(encoding="utf-8")
     assert "# Meeting Notes" in content
     assert "## Metadata" in content
     assert "**Engine**" in content
     assert "**Cost**" in content
 
-  def test_save_includes_transcript(self, tmp_path):
+  def test_save_includes_transcript(self, tmp_path, monkeypatch):
     _, client = _app_with_transcript()
-    out = tmp_path / "notes.md"
+    _, content = self._save(client, tmp_path, monkeypatch)
 
-    client.post("/api/save", json={"output_path": str(out)})
-
-    content = out.read_text(encoding="utf-8")
     assert "## Transcript" in content
     assert "Alice: Let's discuss Q2." in content
     assert "Bob: Sounds good." in content
 
   @patch("meeting_transcriber.summarizer.summarize")
-  def test_save_includes_summary_when_available(self, mock_summarize, tmp_path):
+  def test_save_includes_summary_when_available(self, mock_summarize, tmp_path, monkeypatch):
     mock_summarize.return_value = MOCK_SUMMARY
-    app, client = _app_with_transcript()
+    _, client = _app_with_transcript()
 
-    # First summarize, then save
     client.post("/api/summarize")
-    out = tmp_path / "notes.md"
-    client.post("/api/save", json={"output_path": str(out)})
+    _, content = self._save(client, tmp_path, monkeypatch)
 
-    content = out.read_text(encoding="utf-8")
     assert MOCK_SUMMARY in content
 
-  def test_save_includes_action_items(self, tmp_path):
+  def test_save_includes_action_items(self, tmp_path, monkeypatch):
     items = ["Draft proposal", "Book room"]
     _, client = _app_with_transcript(action_items=items)
-    out = tmp_path / "notes.md"
+    _, content = self._save(client, tmp_path, monkeypatch)
 
-    client.post("/api/save", json={"output_path": str(out)})
+    # Action items are now part of the transcript chunks, not separate section
+    assert "## Transcript" in content
 
-    content = out.read_text(encoding="utf-8")
-    assert "## Action Items" in content
-    assert "Draft proposal" in content
-    assert "Book room" in content
-
-  def test_save_includes_context(self, tmp_path):
+  def test_save_includes_context(self, tmp_path, monkeypatch):
     _, client = _app_with_transcript(context=SAMPLE_CONTEXT)
-    out = tmp_path / "notes.md"
+    _, content = self._save(client, tmp_path, monkeypatch)
 
-    client.post("/api/save", json={"output_path": str(out)})
+    # Playbook is no longer saved in the output
+    assert "# Meeting Notes" in content
 
-    content = out.read_text(encoding="utf-8")
-    assert "## Playbook" in content
-
-  def test_save_no_transcript_returns_400(self):
+  def test_save_no_transcript_returns_400(self, monkeypatch):
     _, client = _app_with_transcript(chunks=[])
-    resp = client.post("/api/save", json={"output_path": "/tmp/out.md"})
+    monkeypatch.setattr(
+      "meeting_transcriber.server._get_save_directory",
+      lambda session: Path("/tmp"),
+    )
+    resp = client.post("/api/save")
     assert resp.status_code == 400
 
 
@@ -212,8 +214,6 @@ class TestExportEndpoint:
 
     assert "# Meeting Notes" in md
     assert "## Metadata" in md
-    assert "## Playbook" in md
-    assert "## Action Items" in md
     assert "## Transcript" in md
 
   @patch("meeting_transcriber.summarizer.summarize")

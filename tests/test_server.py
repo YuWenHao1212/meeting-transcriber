@@ -1,5 +1,6 @@
 """Tests for the FastAPI web server."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from starlette.testclient import TestClient
@@ -49,7 +50,7 @@ class TestStartStop:
     client = _make_client()
     resp = client.post("/api/stop")
     assert resp.status_code == 404
-    assert "Not recording" in resp.json()["error"]
+    assert "No active session" in resp.json()["error"]
 
 
 class TestStatus:
@@ -119,15 +120,20 @@ class TestSave:
     resp = client.post("/api/save", json={"output_path": "/tmp/out.md"})
     assert resp.status_code == 400
 
-  def test_save_writes_file(self, tmp_path):
+  def test_save_writes_file(self, tmp_path, monkeypatch):
     app = create_app()
     app.state.session["transcript_chunks"] = ["line 1", "line 2"]
+    # Patch _get_save_directory to use tmp_path
+    monkeypatch.setattr(
+      "meeting_transcriber.server._get_save_directory",
+      lambda session: tmp_path,
+    )
     client = TestClient(app)
-    out = tmp_path / "notes.md"
-    resp = client.post("/api/save", json={"output_path": str(out)})
+    resp = client.post("/api/save")
     assert resp.status_code == 200
-    assert out.exists()
-    assert "line 1" in out.read_text(encoding="utf-8")
+    saved = Path(resp.json()["path"])
+    assert saved.exists()
+    assert "line 1" in saved.read_text(encoding="utf-8")
 
 
 class TestWebSocket:
