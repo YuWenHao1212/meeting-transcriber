@@ -92,14 +92,15 @@ class TestTranscribeNewChunks:
   def test_timestamp_format(self, mock_prompter, session):
     mock_engine = MagicMock()
     mock_engine.transcribe_file.return_value = TranscriptResult(
-      full_text="text", duration=30.0, cost=0.0, engine="mock",
+      full_text="text",
+      duration=30.0,
+      cost=0.0,
+      engine="mock",
     )
     chunks = [Path(f"/tmp/c{i}.wav") for i in range(5)]
     _transcribe_new_chunks(session, mock_engine, chunks, 0, 30, "zh")
 
-    timestamps = [
-      m["timestamp"] for m in session["_ws_queue"] if m["type"] == "transcript"
-    ]
+    timestamps = [m["timestamp"] for m in session["_ws_queue"] if m["type"] == "transcript"]
     assert timestamps == ["00:00", "00:30", "01:00", "01:30", "02:00"]
 
 
@@ -214,9 +215,9 @@ class TestStartStopWithRecording:
     from starlette.testclient import TestClient
 
     with patch("meeting_transcriber.server._recording_loop"):
-      app = __import__(
-        "meeting_transcriber.server", fromlist=["create_app"]
-      ).create_app(record=True)
+      app = __import__("meeting_transcriber.server", fromlist=["create_app"]).create_app(
+        record=True
+      )
       client = TestClient(app)
 
       resp = client.post("/api/start")
@@ -237,9 +238,9 @@ class TestStartStopWithRecording:
       session["recorder"] = mock_recorder
 
     with patch("meeting_transcriber.server._recording_loop", side_effect=fake_loop):
-      app = __import__(
-        "meeting_transcriber.server", fromlist=["create_app"]
-      ).create_app(record=True)
+      app = __import__("meeting_transcriber.server", fromlist=["create_app"]).create_app(
+        record=True
+      )
       client = TestClient(app)
 
       client.post("/api/start")
@@ -255,9 +256,7 @@ class TestWebSocketBroadcast:
     from starlette.testclient import TestClient
 
     with patch("meeting_transcriber.server._recording_loop"):
-      app = __import__(
-        "meeting_transcriber.server", fromlist=["create_app"]
-      ).create_app()
+      app = __import__("meeting_transcriber.server", fromlist=["create_app"]).create_app()
       session = app.state.session
       # Pre-populate queue
       session["_ws_queue"].append({"type": "transcript", "timestamp": "00:00", "text": "hi"})
@@ -279,9 +278,9 @@ class TestWebSocketBroadcast:
     ctx.write_text("# Agenda\n1. Intro", encoding="utf-8")
 
     with patch("meeting_transcriber.server._recording_loop"):
-      app = __import__(
-        "meeting_transcriber.server", fromlist=["create_app"]
-      ).create_app(context_paths=[str(ctx)])
+      app = __import__("meeting_transcriber.server", fromlist=["create_app"]).create_app(
+        context_paths=[str(ctx)]
+      )
       session = app.state.session
 
       client = TestClient(app)
@@ -317,7 +316,10 @@ class TestCoachingMessages:
   @patch("meeting_transcriber.prompter.detect_action_items", return_value=[])
   @patch("meeting_transcriber.prompter.detect_questions")
   def test_multiple_questions_produce_multiple_cards(
-    self, mock_detect_q, mock_detect_ai, session,
+    self,
+    mock_detect_q,
+    mock_detect_ai,
+    session,
   ):
     from meeting_transcriber.prompter import DetectedQuestion
 
@@ -421,7 +423,10 @@ class TestPrompterErrorResilience:
     side_effect=RuntimeError("API down"),
   )
   def test_detect_questions_error_does_not_crash(
-    self, mock_detect_q, mock_detect_ai, session,
+    self,
+    mock_detect_q,
+    mock_detect_ai,
+    session,
   ):
     # Should not raise
     _run_prompter(session, "some text", [])
@@ -436,7 +441,10 @@ class TestPrompterErrorResilience:
   )
   @patch("meeting_transcriber.prompter.detect_questions", return_value=[])
   def test_detect_action_items_error_does_not_crash(
-    self, mock_detect_q, mock_detect_ai, session,
+    self,
+    mock_detect_q,
+    mock_detect_ai,
+    session,
   ):
     # Should not raise
     _run_prompter(session, "some text", [])
@@ -467,12 +475,15 @@ class TestPrompterErrorResilience:
       engine="mock",
     )
 
-    with patch(
-      "meeting_transcriber.prompter.detect_questions",
-      side_effect=RuntimeError("fail"),
-    ), patch(
-      "meeting_transcriber.prompter.detect_action_items",
-      side_effect=RuntimeError("fail"),
+    with (
+      patch(
+        "meeting_transcriber.prompter.detect_questions",
+        side_effect=RuntimeError("fail"),
+      ),
+      patch(
+        "meeting_transcriber.prompter.detect_action_items",
+        side_effect=RuntimeError("fail"),
+      ),
     ):
       chunks = [Path("/tmp/c0.wav")]
       _transcribe_new_chunks(session, mock_engine, chunks, 0, 30, "zh")

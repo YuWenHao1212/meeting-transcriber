@@ -1,12 +1,11 @@
 """Tests for Qwen ASR engine (DashScope OpenAI-compatible API)."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from meeting_transcriber.engines.qwen import QwenEngine
-from meeting_transcriber.models import Segment, TranscriptResult
+from meeting_transcriber.models import TranscriptResult
 
 
 def _make_mock_response(

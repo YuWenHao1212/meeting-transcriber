@@ -1,10 +1,10 @@
 """Real-time coaching prompt engine for meeting assistance."""
 
-from dataclasses import dataclass, field
-from pathlib import Path
 import json
 import logging
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import anthropic
 
@@ -70,16 +70,16 @@ def _extract_keywords(text: str) -> list[str]:
   """
   keywords: list[str] = []
   # Extract CJK sequences (Chinese keywords)
-  cjk = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]{2,}', text)
+  cjk = re.findall(r"[\u4e00-\u9fff\u3400-\u4dbf]{2,}", text)
   keywords.extend(cjk)
   # Extract capitalized words
-  words = re.findall(r'\b[A-Z][a-zA-Z]+\b', text)
+  words = re.findall(r"\b[A-Z][a-zA-Z]+\b", text)
   keywords.extend(words)
   # Extract content after bullet points
-  bullets = re.findall(r'[-*]\s+(.+?)(?:\n|$)', text)
+  bullets = re.findall(r"[-*]\s+(.+?)(?:\n|$)", text)
   for bullet in bullets:
     parts = bullet.strip().split()[:4]
-    keywords.append(' '.join(parts))
+    keywords.append(" ".join(parts))
   return list(set(keywords))
 
 
@@ -99,7 +99,7 @@ def detect_questions(transcript_chunk: str) -> list[DetectedQuestion]:
       max_tokens=512,
       system=(
         "Extract questions and key discussion topics from meeting transcript. "
-        "Return JSON array: [{\"question\": \"...\", \"keywords\": [\"...\", ...]}]. "
+        'Return JSON array: [{"question": "...", "keywords": ["...", ...]}]. '
         "Focus on questions from the OTHER party (not the user). "
         "Include both explicit questions and implicit topic shifts. "
         "Keywords should be specific nouns/terms, both English and Chinese."
@@ -148,11 +148,13 @@ def match_context(
 
     if matched:
       score = len(matched) / len(lower_keywords)
-      matches.append(ContextMatch(
-        chunk=chunk,
-        score=score,
-        matched_keywords=matched,
-      ))
+      matches.append(
+        ContextMatch(
+          chunk=chunk,
+          score=score,
+          matched_keywords=matched,
+        )
+      )
 
   matches.sort(key=lambda m: m.score, reverse=True)
   return matches
@@ -195,8 +197,8 @@ def detect_action_items(transcript_chunk: str) -> list[ActionItem]:
       system=(
         "Extract action items from meeting transcript. "
         "Return JSON array: "
-        "[{\"text\": \"...\", \"owner\": \"name or null\", "
-        "\"deadline\": \"date or null\"}]. "
+        '[{"text": "...", "owner": "name or null", '
+        '"deadline": "date or null"}]. '
         "Only include clear commitments, not general discussion."
       ),
       messages=[{"role": "user", "content": transcript_chunk}],

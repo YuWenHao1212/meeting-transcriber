@@ -33,6 +33,7 @@ def record(
 
   if output is None:
     from datetime import datetime
+
     output = Path(f"recording-{datetime.now().strftime('%Y%m%d-%H%M%S')}.wav")
 
   recorder = Recorder(device_id=device)
@@ -53,7 +54,10 @@ def transcribe(
   file: Annotated[Path, typer.Argument(help="Audio file to transcribe")],
   language: Annotated[str, typer.Option("--language", "-l", help="Language code")] = "zh",
   engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "openai",
-  output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output markdown path")] = None,
+  output: Annotated[
+    Optional[Path],
+    typer.Option("--output", "-o", help="Output markdown path"),
+  ] = None,
 ) -> None:
   """Transcribe an audio file to markdown."""
   from meeting_transcriber.formats import transcript_to_markdown
@@ -79,7 +83,10 @@ def transcribe(
 @app.command()
 def summarize(
   transcript: Annotated[Path, typer.Argument(help="Transcript markdown file")],
-  playbook: Annotated[Optional[Path], typer.Option("--playbook", "-p", help="Pre-meeting playbook")] = None,
+  playbook: Annotated[
+    Optional[Path],
+    typer.Option("--playbook", "-p", help="Pre-meeting playbook"),
+  ] = None,
   output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output path")] = None,
 ) -> None:
   """Summarize a transcript into structured meeting notes."""
@@ -107,14 +114,16 @@ def summarize(
 @app.command()
 def live(
   device: Annotated[Optional[int], typer.Option("--device", "-d", help="Audio device ID")] = None,
-  output_dir: Annotated[Optional[Path], typer.Option("--output-dir", help="Output directory")] = None,
+  output_dir: Annotated[
+    Optional[Path],
+    typer.Option("--output-dir", help="Output directory"),
+  ] = None,
   language: Annotated[str, typer.Option("--language", "-l", help="Language code")] = "zh",
   engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "openai",
   chunk_duration: Annotated[int, typer.Option("--chunk-duration", help="Seconds per chunk")] = 30,
 ) -> None:
   """Record and transcribe in real-time."""
   import threading
-  import time
   from datetime import datetime
 
   from meeting_transcriber.chunker import chunk_audio
@@ -139,7 +148,7 @@ def live(
   total_cost = 0.0
   stop_event = threading.Event()
 
-  console.print(f"[bold green]Live recording + transcription[/]")
+  console.print("[bold green]Live recording + transcription[/]")
   console.print(f"Engine: {engine}, Language: {language}, Chunk: {chunk_duration}s")
   console.print(f"Audio: {audio_path}")
   console.print(f"Transcript: {transcript_path}")
@@ -159,14 +168,16 @@ def live(
             result = stt_engine.transcribe_file(chunks[i], language=language)
             offset = i * chunk_duration
             for seg in result.segments:
-              all_segments.append(Segment(
-                start=seg.start + offset,
-                end=seg.end + offset,
-                text=seg.text,
-                speaker=seg.speaker,
-              ))
+              all_segments.append(
+                Segment(
+                  start=seg.start + offset,
+                  end=seg.end + offset,
+                  text=seg.text,
+                  speaker=seg.speaker,
+                )
+              )
             total_cost += result.cost
-            console.print(f"[dim][chunk {i+1}][/] {result.full_text[:80]}")
+            console.print(f"[dim][chunk {i + 1}][/] {result.full_text[:80]}")
           chunk_index = len(chunks)
       except Exception as err:
         console.print(f"[yellow]Transcription error:[/] {err}")
@@ -191,7 +202,7 @@ def live(
     md = transcript_to_markdown(final_result)
     transcript_path.write_text(md, encoding="utf-8")
 
-    console.print(f"\n[bold green]Done.[/]")
+    console.print("\n[bold green]Done.[/]")
     console.print(f"Duration: {recording.duration:.1f}s, Cost: ${total_cost:.4f}")
     console.print(f"Audio: {recording.path}")
     console.print(f"Transcript: {transcript_path}")
@@ -204,7 +215,10 @@ def live(
 @app.command()
 def serve(
   port: Annotated[int, typer.Option("--port", "-p", help="Server port")] = 8765,
-  context: Annotated[Optional[list[Path]], typer.Option("--context", "-c", help="Context files")] = None,
+  context: Annotated[
+    Optional[list[Path]],
+    typer.Option("--context", "-c", help="Context files"),
+  ] = None,
   engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "openai",
   language: Annotated[str, typer.Option("--language", "-l", help="Language code")] = "zh",
 ) -> None:
@@ -224,12 +238,71 @@ def serve(
 
 
 @app.command()
-def init() -> None:
-  """Set up configuration directory and API key template."""
+def setup() -> None:
+  """Check dependencies, configure API keys, and list audio devices."""
+  import os
+
   from meeting_transcriber.config import init_config
 
+  console.print("[bold]Meeting Transcriber Setup[/]\n")
+
+  # Step 1: Create config directory and .env template
   config_dir = init_config()
-  console.print(f"[bold green]Config initialized.[/] Edit: {config_dir / '.env'}")
+  env_file = config_dir / ".env"
+  console.print(f"[green]\u2713[/] Config directory: {config_dir}")
+  console.print(f"  .env file: {env_file}\n")
+
+  # Step 2: Check API keys
+  console.print("[bold]API Keys[/]")
+  api_keys = [
+    ("OPENAI_API_KEY", "OpenAI (transcription)"),
+    ("ANTHROPIC_API_KEY", "Anthropic (summarization)"),
+  ]
+  all_keys_set = True
+  for env_var, label in api_keys:
+    value = os.environ.get(env_var, "")
+    if value:
+      masked = value[:4] + "..." + value[-4:]
+      console.print(f"  [green]\u2713[/] {label}: {masked}")
+    else:
+      console.print(f"  [red]\u2717[/] {label}: not set")
+      all_keys_set = False
+
+  if not all_keys_set:
+    console.print(f"\n  [dim]Set keys in {env_file} or as environment variables.[/]")
+  console.print()
+
+  # Step 3: List audio devices and check BlackHole
+  console.print("[bold]Audio Devices[/]")
+  try:
+    from meeting_transcriber.recorder import list_devices
+
+    devices = list_devices()
+    _show_devices()
+
+    blackhole_found = any("blackhole" in str(dev.get("name", "")).lower() for dev in devices)
+    if blackhole_found:
+      console.print("  [green]\u2713[/] BlackHole detected — system audio capture available.")
+    else:
+      console.print("  [yellow]\u2717[/] BlackHole not found.")
+      console.print(
+        "  [dim]Install BlackHole to capture system audio: https://existential.audio/blackhole/[/]"
+      )
+  except Exception as err:
+    console.print(f"  [red]Could not list devices:[/] {err}")
+
+  console.print()
+
+  # Step 4: Summary
+  console.print("[bold]Summary[/]")
+  if all_keys_set:
+    console.print("  [green]\u2713[/] All API keys configured.")
+  else:
+    console.print(
+      "  [yellow]\u2717[/] Some API keys missing — transcription/summarization won't work.",
+    )
+  console.print(f"  Config: {env_file}")
+  console.print("  [dim]Run [bold]mt setup[/bold] again after making changes.[/]")
 
 
 def _show_devices() -> None:

@@ -62,10 +62,7 @@ class TestLoadConfig:
 
   def test_defaults_applied(self, tmp_path):
     env_file = tmp_path / ".env"
-    env_file.write_text(
-      "OPENAI_API_KEY=sk-test\n"
-      "ANTHROPIC_API_KEY=sk-ant-test\n"
-    )
+    env_file.write_text("OPENAI_API_KEY=sk-test\nANTHROPIC_API_KEY=sk-ant-test\n")
     config = load_config(config_dir=tmp_path)
     assert config["transcription_language"] == "zh"
     assert config["transcription_engine"] == "openai"
@@ -86,7 +83,7 @@ class TestLoadConfig:
   def test_missing_keys_error_includes_instructions(self, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text("")
-    with pytest.raises(ConfigError, match="mt init"):
+    with pytest.raises(ConfigError, match="mt setup"):
       load_config(config_dir=tmp_path)
 
   def test_no_env_file_still_reads_env_vars(self, tmp_path):
@@ -101,10 +98,7 @@ class TestLoadConfig:
 
   def test_audio_device_defaults_to_none(self, tmp_path):
     env_file = tmp_path / ".env"
-    env_file.write_text(
-      "OPENAI_API_KEY=sk-test\n"
-      "ANTHROPIC_API_KEY=sk-ant-test\n"
-    )
+    env_file.write_text("OPENAI_API_KEY=sk-test\nANTHROPIC_API_KEY=sk-ant-test\n")
     config = load_config(config_dir=tmp_path)
     assert config["audio_device"] is None
 

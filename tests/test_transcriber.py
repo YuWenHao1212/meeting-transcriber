@@ -1,15 +1,12 @@
 """Tests for transcriber and engine architecture."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from meeting_transcriber.engines.base import BaseEngine
 from meeting_transcriber.engines.registry import get_engine, list_engines
-from meeting_transcriber.models import Segment, TranscriptResult
-
+from meeting_transcriber.models import TranscriptResult
 
 # --- Engine registry tests ---
 
@@ -50,7 +47,6 @@ class TestListEngines:
     for entry in list_engines():
       assert "name" in entry
       assert "cost_per_minute" in entry
-
 
 
 # --- OpenAI engine tests ---
@@ -170,11 +166,13 @@ class TestTranscribeChunks:
     engine, mock_client = _make_openai_engine()
 
     response1 = _make_mock_response(
-      text="First chunk", duration=30.0,
+      text="First chunk",
+      duration=30.0,
       segments=[MagicMock(start=0.0, end=30.0, text="First chunk")],
     )
     response2 = _make_mock_response(
-      text="Second chunk", duration=30.0,
+      text="Second chunk",
+      duration=30.0,
       segments=[MagicMock(start=0.0, end=30.0, text="Second chunk")],
     )
     mock_client.audio.transcriptions.create.side_effect = [response1, response2]
@@ -220,9 +218,7 @@ class TestTranscribeFunction:
     from meeting_transcriber.transcriber import transcribe
 
     mock_engine = MagicMock()
-    mock_engine.transcribe_chunks.return_value = TranscriptResult(
-      full_text="test", engine="openai"
-    )
+    mock_engine.transcribe_chunks.return_value = TranscriptResult(full_text="test", engine="openai")
     mock_get_engine.return_value = mock_engine
     mock_chunk.return_value = [Path("c1.wav")]
 
@@ -238,9 +234,7 @@ class TestTranscribeFunction:
     from meeting_transcriber.transcriber import transcribe_file
 
     mock_engine = MagicMock()
-    mock_engine.transcribe_file.return_value = TranscriptResult(
-      full_text="direct", engine="openai"
-    )
+    mock_engine.transcribe_file.return_value = TranscriptResult(full_text="direct", engine="openai")
     mock_get_engine.return_value = mock_engine
 
     result = transcribe_file(Path("test.wav"), engine_name="openai")

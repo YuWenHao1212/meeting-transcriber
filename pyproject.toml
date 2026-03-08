@@ -54,6 +54,10 @@ pythonpath = ["src"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+indent-width = 2
+
+[tool.ruff.format]
+indent-style = "space"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

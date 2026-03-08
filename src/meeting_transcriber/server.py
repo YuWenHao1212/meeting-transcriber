@@ -89,7 +89,12 @@ def _recording_loop(
     try:
       chunks = chunk_audio(audio_path, chunk_duration=chunk_duration, overlap=2)
       _transcribe_new_chunks(
-        session, engine, chunks, chunk_index, chunk_duration, language,
+        session,
+        engine,
+        chunks,
+        chunk_index,
+        chunk_duration,
+        language,
         context_chunks=session.get("context_chunks", []),
       )
       chunk_index = len(chunks)
@@ -116,15 +121,19 @@ def _transcribe_new_chunks(
 
     session["transcript_chunks"].append(result.full_text)
     session["total_cost"] += result.cost
-    session["_ws_queue"].append({
-      "type": "transcript",
-      "timestamp": timestamp_str,
-      "text": result.full_text,
-    })
-    session["_ws_queue"].append({
-      "type": "cost",
-      "value": session["total_cost"],
-    })
+    session["_ws_queue"].append(
+      {
+        "type": "transcript",
+        "timestamp": timestamp_str,
+        "text": result.full_text,
+      }
+    )
+    session["_ws_queue"].append(
+      {
+        "type": "cost",
+        "value": session["total_cost"],
+      }
+    )
 
     # Run coaching prompt pipeline
     _run_prompter(session, result.full_text, context_chunks or [])
@@ -135,6 +144,7 @@ def _load_session_context_chunks(session: dict[str, Any]) -> None:
   if not session["context_paths"]:
     return
   from meeting_transcriber.prompter import load_context
+
   session["context_chunks"] = load_context(session["context_paths"])
 
 
@@ -160,27 +170,33 @@ def _run_prompter(
     for question in questions:
       matches = match_context(question.keywords, context_chunks)
       card_text = generate_prompt_card(question, matches)
-      session["_ws_queue"].append({
-        "type": "coaching",
-        "text": card_text,
-      })
+      session["_ws_queue"].append(
+        {
+          "type": "coaching",
+          "text": card_text,
+        }
+      )
   except Exception:
     pass  # detect_questions already handles errors internally
 
   try:
     items = detect_action_items(transcript_text)
     for item in items:
-      session["action_items"].append({
-        "text": item.text,
-        "owner": item.owner,
-        "deadline": item.deadline,
-      })
-      session["_ws_queue"].append({
-        "type": "action_item",
-        "text": item.text,
-        "owner": item.owner,
-        "deadline": item.deadline,
-      })
+      session["action_items"].append(
+        {
+          "text": item.text,
+          "owner": item.owner,
+          "deadline": item.deadline,
+        }
+      )
+      session["_ws_queue"].append(
+        {
+          "type": "action_item",
+          "text": item.text,
+          "owner": item.owner,
+          "deadline": item.deadline,
+        }
+      )
   except Exception:
     pass  # detect_action_items already handles errors internally
 
@@ -316,18 +332,22 @@ def create_app(
       session["_thread"].join(timeout=5)
 
     session["start_time"] = None
-    return JSONResponse({
-      "status": "stopped",
-      "duration": round(duration, 1),
-    })
+    return JSONResponse(
+      {
+        "status": "stopped",
+        "duration": round(duration, 1),
+      }
+    )
 
   @app.get("/api/status")
   async def get_status() -> JSONResponse:
-    return JSONResponse({
-      "recording": session["active"],
-      "duration": round(_elapsed(session), 1),
-      "cost": round(session["total_cost"], 4),
-    })
+    return JSONResponse(
+      {
+        "recording": session["active"],
+        "duration": round(_elapsed(session), 1),
+        "cost": round(session["total_cost"], 4),
+      }
+    )
 
   @app.post("/api/summarize")
   async def summarize_session() -> JSONResponse:
@@ -349,10 +369,12 @@ def create_app(
     # Queue summary to WebSocket clients
     session["_ws_queue"].append({"type": "summary", "text": summary_md})
 
-    return JSONResponse({
-      "summary": summary_md,
-      "action_items": session["action_items"],
-    })
+    return JSONResponse(
+      {
+        "summary": summary_md,
+        "action_items": session["action_items"],
+      }
+    )
 
   @app.post("/api/save")
   async def save_notes(body: SaveRequest) -> JSONResponse:
@@ -381,10 +403,12 @@ def create_app(
     md = _build_meeting_markdown(session, app.state.engine_name)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = f"meeting-{timestamp}.md"
-    return JSONResponse({
-      "markdown": md,
-      "suggested_filename": filename,
-    })
+    return JSONResponse(
+      {
+        "markdown": md,
+        "suggested_filename": filename,
+      }
+    )
 
   @app.websocket("/ws")
   async def websocket_endpoint(ws: WebSocket) -> None:
@@ -396,11 +420,13 @@ def create_app(
         await _drain_ws_queue(session)
         # Listen for incoming messages with short timeout
         try:
-          data = await asyncio.wait_for(ws.receive_text(), timeout=0.5)
-          await ws.send_json({
-            "type": "status",
-            "recording": session["active"],
-          })
+          await asyncio.wait_for(ws.receive_text(), timeout=0.5)
+          await ws.send_json(
+            {
+              "type": "status",
+              "recording": session["active"],
+            }
+          )
         except asyncio.TimeoutError:
           continue
     except WebSocketDisconnect:

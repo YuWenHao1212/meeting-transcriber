@@ -39,8 +39,7 @@ class SonioxEngine(BaseEngine):
       key = os.environ.get("SONIOX_API_KEY")
       if not key:
         raise RuntimeError(
-          "SONIOX_API_KEY environment variable is not set. "
-          "Get your key at https://soniox.com"
+          "SONIOX_API_KEY environment variable is not set. Get your key at https://soniox.com"
         )
       self._api_key = key
     return self._api_key
@@ -67,11 +66,9 @@ class SonioxEngine(BaseEngine):
       except Exception as err:
         last_error = err
         if attempt < _MAX_RETRIES - 1:
-          time.sleep(_BACKOFF_BASE ** attempt)
+          time.sleep(_BACKOFF_BASE**attempt)
 
-    raise RuntimeError(
-      f"Soniox transcription failed after {_MAX_RETRIES} attempts: {last_error}"
-    )
+    raise RuntimeError(f"Soniox transcription failed after {_MAX_RETRIES} attempts: {last_error}")
 
   def _send_request(self, path: Path) -> dict:
     """Send multipart/form-data POST to Soniox API."""
@@ -102,10 +99,7 @@ class SonioxEngine(BaseEngine):
 
     # File field
     parts.write(f"--{boundary}\r\n".encode())
-    parts.write(
-      f'Content-Disposition: form-data; name="file"; '
-      f'filename="{path.name}"\r\n'.encode()
-    )
+    parts.write(f'Content-Disposition: form-data; name="file"; filename="{path.name}"\r\n'.encode())
     parts.write(b"Content-Type: application/octet-stream\r\n\r\n")
     parts.write(path.read_bytes())
     parts.write(b"\r\n")
@@ -164,11 +158,13 @@ class SonioxEngine(BaseEngine):
       ):
         joined = "".join(current_texts).strip()
         if joined:
-          segments.append(Segment(
-            start=current_start_ms / 1000.0,
-            end=current_end_ms / 1000.0,
-            text=joined,
-          ))
+          segments.append(
+            Segment(
+              start=current_start_ms / 1000.0,
+              end=current_end_ms / 1000.0,
+              text=joined,
+            )
+          )
         current_texts = []
         current_start_ms = None
 
@@ -187,10 +183,12 @@ class SonioxEngine(BaseEngine):
     if current_texts:
       joined = "".join(current_texts).strip()
       if joined and current_start_ms is not None:
-        segments.append(Segment(
-          start=current_start_ms / 1000.0,
-          end=current_end_ms / 1000.0,
-          text=joined,
-        ))
+        segments.append(
+          Segment(
+            start=current_start_ms / 1000.0,
+            end=current_end_ms / 1000.0,
+            text=joined,
+          )
+        )
 
     return segments

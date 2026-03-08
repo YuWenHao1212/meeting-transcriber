@@ -2,10 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from meeting_transcriber.summarizer import summarize
-
 
 SAMPLE_TRANSCRIPT = (
   "Alice: Let's discuss the Q2 roadmap.\n"
@@ -21,12 +18,7 @@ SAMPLE_PLAYBOOK = (
   "3. Discuss hiring timeline\n"
 )
 
-CUSTOM_TEMPLATE = (
-  "## TL;DR\n"
-  "{summary}\n"
-  "## Takeaways\n"
-  "{takeaways}\n"
-)
+CUSTOM_TEMPLATE = "## TL;DR\n{summary}\n## Takeaways\n{takeaways}\n"
 
 
 def _make_mock_response(text: str = "# Meeting Summary\n\nMock summary.") -> MagicMock:

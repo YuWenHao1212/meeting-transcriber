@@ -1,6 +1,5 @@
 """Tests for audio chunking module."""
 
-import tempfile
 from pathlib import Path
 
 import numpy as np

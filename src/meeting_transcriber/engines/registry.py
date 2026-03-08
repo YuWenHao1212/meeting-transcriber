@@ -10,10 +10,10 @@ def _register_defaults() -> None:
   if _ENGINE_MAP:
     return
 
+  from meeting_transcriber.engines.groq import GroqEngine
   from meeting_transcriber.engines.openai_engine import OpenAIEngine
   from meeting_transcriber.engines.qwen import QwenEngine
   from meeting_transcriber.engines.soniox import SonioxEngine
-  from meeting_transcriber.engines.groq import GroqEngine
 
   _ENGINE_MAP["openai"] = OpenAIEngine
   _ENGINE_MAP["qwen"] = QwenEngine
@@ -27,9 +27,7 @@ def get_engine(name: str) -> BaseEngine:
   engine_cls = _ENGINE_MAP.get(name)
   if engine_cls is None:
     available = ", ".join(sorted(_ENGINE_MAP.keys()))
-    raise ValueError(
-      f"Unknown engine '{name}'. Available engines: {available}"
-    )
+    raise ValueError(f"Unknown engine '{name}'. Available engines: {available}")
   return engine_cls()
 
 

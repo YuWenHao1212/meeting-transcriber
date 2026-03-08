@@ -18,10 +18,10 @@ from meeting_transcriber.prompter import (
   match_context,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def context_file(tmp_path: Path) -> Path:
@@ -85,6 +85,7 @@ def _make_haiku_response_with_codeblock(data: list[dict]) -> MagicMock:
 # Context Loading
 # ---------------------------------------------------------------------------
 
+
 class TestLoadContext:
   """Test load_context() file loading and chunking."""
 
@@ -133,14 +134,15 @@ class TestLoadContext:
       all_keywords.extend(chunk.keywords)
     # Should extract Chinese terms like 報價範圍, 預算, etc.
     keyword_text = " ".join(all_keywords)
-    assert any(
-      term in keyword_text for term in ["報價", "預算", "時程"]
-    ), f"Expected Chinese keywords, got: {all_keywords}"
+    assert any(term in keyword_text for term in ["報價", "預算", "時程"]), (
+      f"Expected Chinese keywords, got: {all_keywords}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Question Detection
 # ---------------------------------------------------------------------------
+
 
 class TestDetectQuestions:
   """Test detect_questions() with mocked Anthropic client."""
@@ -149,10 +151,12 @@ class TestDetectQuestions:
   def test_returns_detected_questions(self, mock_anthropic):
     mock_client = MagicMock()
     mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response([
-      {"question": "What is the timeline?", "keywords": ["timeline", "deadline"]},
-      {"question": "How much is the budget?", "keywords": ["budget", "cost"]},
-    ])
+    mock_client.messages.create.return_value = _make_haiku_response(
+      [
+        {"question": "What is the timeline?", "keywords": ["timeline", "deadline"]},
+        {"question": "How much is the budget?", "keywords": ["budget", "cost"]},
+      ]
+    )
 
     result = detect_questions("Client asked about the timeline and budget.")
 
@@ -165,9 +169,11 @@ class TestDetectQuestions:
   def test_handles_code_block_response(self, mock_anthropic):
     mock_client = MagicMock()
     mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response_with_codeblock([
-      {"question": "What about pricing?", "keywords": ["pricing"]},
-    ])
+    mock_client.messages.create.return_value = _make_haiku_response_with_codeblock(
+      [
+        {"question": "What about pricing?", "keywords": ["pricing"]},
+      ]
+    )
 
     result = detect_questions("They asked about pricing.")
 
@@ -221,6 +227,7 @@ class TestDetectQuestions:
 # ---------------------------------------------------------------------------
 # Context Matching
 # ---------------------------------------------------------------------------
+
 
 class TestMatchContext:
   """Test match_context() keyword matching logic."""
@@ -296,6 +303,7 @@ class TestMatchContext:
 # Prompt Card Generation
 # ---------------------------------------------------------------------------
 
+
 class TestGeneratePromptCard:
   """Test generate_prompt_card() formatting."""
 
@@ -357,6 +365,7 @@ class TestGeneratePromptCard:
 # Action Item Detection
 # ---------------------------------------------------------------------------
 
+
 class TestDetectActionItems:
   """Test detect_action_items() with mocked Anthropic client."""
 
@@ -364,10 +373,12 @@ class TestDetectActionItems:
   def test_returns_action_items(self, mock_anthropic):
     mock_client = MagicMock()
     mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response([
-      {"text": "Draft proposal", "owner": "Bob", "deadline": "Friday"},
-      {"text": "Review budget", "owner": None, "deadline": None},
-    ])
+    mock_client.messages.create.return_value = _make_haiku_response(
+      [
+        {"text": "Draft proposal", "owner": "Bob", "deadline": "Friday"},
+        {"text": "Review budget", "owner": None, "deadline": None},
+      ]
+    )
 
     result = detect_action_items("Bob will draft a proposal by Friday.")
 
@@ -396,9 +407,11 @@ class TestDetectActionItems:
   def test_handles_code_block_response(self, mock_anthropic):
     mock_client = MagicMock()
     mock_anthropic.Anthropic.return_value = mock_client
-    mock_client.messages.create.return_value = _make_haiku_response_with_codeblock([
-      {"text": "Send report", "owner": "Alice", "deadline": "Monday"},
-    ])
+    mock_client.messages.create.return_value = _make_haiku_response_with_codeblock(
+      [
+        {"text": "Send report", "owner": "Alice", "deadline": "Monday"},
+      ]
+    )
 
     result = detect_action_items("Alice will send the report by Monday.")
 

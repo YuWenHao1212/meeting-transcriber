@@ -1,6 +1,5 @@
 """Tests for Groq STT engine."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -154,8 +153,10 @@ class TestGroqEngineRetry:
 class TestGroqEngineClientInit:
   def test_missing_api_key_raises(self):
     engine = GroqEngine()
-    with patch.dict("os.environ", {}, clear=True), \
-         patch("meeting_transcriber.engines.groq.openai.OpenAI", side_effect=Exception("No API key")):
+    with (
+      patch.dict("os.environ", {}, clear=True),
+      patch("meeting_transcriber.engines.groq.openai.OpenAI", side_effect=Exception("No API key")),
+    ):
       # Access client property without GROQ_API_KEY set
       with pytest.raises(Exception):
         _ = engine.client

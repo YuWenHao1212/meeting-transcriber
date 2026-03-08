@@ -37,12 +37,14 @@ class BaseEngine(ABC):
       result = self.transcribe_file(chunk_path, language)
       offset = total_duration
       for seg in result.segments:
-        all_segments.append(Segment(
-          start=seg.start + offset,
-          end=seg.end + offset,
-          text=seg.text,
-          speaker=seg.speaker,
-        ))
+        all_segments.append(
+          Segment(
+            start=seg.start + offset,
+            end=seg.end + offset,
+            text=seg.text,
+            speaker=seg.speaker,
+          )
+        )
       all_text_parts.append(result.full_text)
       total_duration += result.duration
       total_cost += result.cost

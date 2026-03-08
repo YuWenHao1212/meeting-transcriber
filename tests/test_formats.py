@@ -1,7 +1,7 @@
 """Tests for formats.py — transcript formatting utilities."""
 
+from meeting_transcriber.formats import meeting_notes_header, transcript_to_markdown
 from meeting_transcriber.models import Segment, TranscriptResult
-from meeting_transcriber.formats import transcript_to_markdown, meeting_notes_header
 
 
 class TestTranscriptToMarkdown:
@@ -53,7 +53,7 @@ class TestTranscriptToMarkdown:
     )
     md = transcript_to_markdown(result)
     # Should NOT have a dangling colon when no speaker
-    lines = [l for l in md.splitlines() if "Some speech." in l]
+    lines = [line for line in md.splitlines() if "Some speech." in line]
     assert len(lines) == 1
     # Pattern: [00:00] Some speech.  (no "None:" or ": Some speech.")
     assert "None" not in lines[0]
@@ -106,11 +106,11 @@ class TestTranscriptToMarkdown:
     # Segments in same minute should NOT have blank line between them
     # Segments in different minutes should have blank line between them
     lines = md.splitlines()
-    transcript_lines = [l for l in lines if l.startswith("[")]
+    transcript_lines = [line for line in lines if line.startswith("[")]
     assert len(transcript_lines) == 4
 
     # Check blank line separates different-minute groups
-    body = md[md.index("[00:00]"):]
+    body = md[md.index("[00:00]") :]
     # Between "Still first minute." and "Second minute." there should be a blank line
     assert "Still first minute.\n\n[01:00]" in body
     # Between same-minute segments, no blank line

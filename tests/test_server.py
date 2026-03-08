@@ -77,16 +77,22 @@ class TestContextLoading:
     ctx_file.write_text("# Meeting Playbook\nAgenda items", encoding="utf-8")
 
     client = _make_client()
-    resp = client.post("/api/start", json={
-      "context_paths": [str(ctx_file)],
-    })
+    resp = client.post(
+      "/api/start",
+      json={
+        "context_paths": [str(ctx_file)],
+      },
+    )
     assert resp.status_code == 200
 
   def test_start_with_nonexistent_context_ignored(self):
     client = _make_client()
-    resp = client.post("/api/start", json={
-      "context_paths": ["/nonexistent/file.md"],
-    })
+    resp = client.post(
+      "/api/start",
+      json={
+        "context_paths": ["/nonexistent/file.md"],
+      },
+    )
     assert resp.status_code == 200
 
 

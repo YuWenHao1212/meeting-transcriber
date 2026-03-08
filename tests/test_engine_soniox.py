@@ -1,8 +1,6 @@
 """Tests for Soniox STT engine."""
 
-import io
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,10 +23,12 @@ def _make_soniox_response(
       {"text": "你好", "start_ms": 2000, "end_ms": 2800},
       {"text": "世界。", "start_ms": 2800, "end_ms": 3500},
     ]
-  return json.dumps({
-    "words": words,
-    "duration_ms": duration_ms,
-  }).encode("utf-8")
+  return json.dumps(
+    {
+      "words": words,
+      "duration_ms": duration_ms,
+    }
+  ).encode("utf-8")
 
 
 def _mock_urlopen(response_bytes, status=200):

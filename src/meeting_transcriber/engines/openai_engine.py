@@ -25,6 +25,7 @@ class OpenAIEngine(BaseEngine):
   def client(self):
     if self._client is None:
       import openai
+
       self._client = openai.OpenAI()
     return self._client
 
@@ -52,21 +53,23 @@ class OpenAIEngine(BaseEngine):
       except Exception as err:
         last_error = err
         if attempt < _MAX_RETRIES - 1:
-          time.sleep(_BACKOFF_BASE ** attempt)
-    raise RuntimeError(
-      f"OpenAI transcription failed after {_MAX_RETRIES} attempts: {last_error}"
-    )
+          time.sleep(_BACKOFF_BASE**attempt)
+    raise RuntimeError(f"OpenAI transcription failed after {_MAX_RETRIES} attempts: {last_error}")
 
   def _parse_response(self, response) -> TranscriptResult:
     """Parse OpenAI verbose_json response into TranscriptResult."""
     segments = []
     if hasattr(response, "segments") and response.segments:
       for seg in response.segments:
-        segments.append(Segment(
-          start=seg.get("start", 0.0) if isinstance(seg, dict) else getattr(seg, "start", 0.0),
-          end=seg.get("end", 0.0) if isinstance(seg, dict) else getattr(seg, "end", 0.0),
-          text=(seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")).strip(),
-        ))
+        segments.append(
+          Segment(
+            start=seg.get("start", 0.0) if isinstance(seg, dict) else getattr(seg, "start", 0.0),
+            end=seg.get("end", 0.0) if isinstance(seg, dict) else getattr(seg, "end", 0.0),
+            text=(
+              seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+            ).strip(),
+          )
+        )
 
     duration = getattr(response, "duration", 0.0) or 0.0
     cost = (duration / 60.0) * self.cost_per_minute

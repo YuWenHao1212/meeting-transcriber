@@ -1,11 +1,10 @@
 """Tests for post-meeting summarize, save, and export endpoints."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from starlette.testclient import TestClient
 
 from meeting_transcriber.server import create_app
-
 
 SAMPLE_CHUNKS = ["Alice: Let's discuss Q2.", "Bob: Sounds good."]
 SAMPLE_CONTEXT = ["## Playbook\n1. Discuss Q2\n2. Assign owners"]
