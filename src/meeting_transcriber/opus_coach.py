@@ -36,7 +36,7 @@ def _run_claude(
 
   try:
     result = subprocess.run(
-      ["claude", "-p", prompt, "--no-input"],
+      ["claude", "-p", prompt],
       capture_output=True,
       text=True,
       timeout=30,
