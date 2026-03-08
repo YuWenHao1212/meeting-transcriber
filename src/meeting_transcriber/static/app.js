@@ -251,7 +251,6 @@ async function uploadContextFiles(files) {
         continue;
       }
 
-      const data = await resp.json();
       appendContext(file.name, await readFileText(file));
     } catch (e) {
       console.error("Upload error:", e);

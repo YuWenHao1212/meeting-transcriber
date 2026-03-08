@@ -349,11 +349,6 @@ def create_app(
         status_code=400,
       )
     session["context"].append(content)
-    session["_ws_queue"].append({
-      "type": "context",
-      "text": content,
-      "filename": file.filename or "uploaded",
-    })
     return JSONResponse({
       "filename": file.filename,
       "length": len(content),
