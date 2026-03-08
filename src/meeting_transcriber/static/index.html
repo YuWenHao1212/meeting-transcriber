@@ -22,9 +22,15 @@
 
   <main class="grid">
     <section class="panel panel-context">
-      <h2>Context / Playbook</h2>
+      <h2>
+        Context / Playbook
+        <label class="upload-btn" title="Upload context file">
+          <input type="file" id="context-file" accept=".md,.txt,.json" multiple hidden onchange="uploadContextFiles(this.files)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 1a.5.5 0 0 1 .5.5V7h5.5a.5.5 0 0 1 0 1H8v5.5a.5.5 0 0 1-1 0V8H1.5a.5.5 0 0 1 0-1H7V1.5a.5.5 0 0 1 .5-.5z"/></svg>
+        </label>
+      </h2>
       <div id="context-list" class="scroll-area">
-        <p class="placeholder">No context loaded. Start a session with context files.</p>
+        <p class="placeholder">No context loaded. Click + to upload a playbook.</p>
       </div>
     </section>
 

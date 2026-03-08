@@ -60,6 +60,9 @@ function handleMessage(msg) {
     case "summary":
       showSummary(msg.text || "");
       break;
+    case "context":
+      appendContext(msg.filename || "Playbook", msg.text || "");
+      break;
     case "status":
       // Status update from server
       break;
@@ -220,6 +223,52 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+// --- Context upload ---
+const contextListEl = document.getElementById("context-list");
+
+async function uploadContextFiles(files) {
+  for (const file of files) {
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const resp = await fetch("/api/context/upload", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        alert(err.error || "Upload failed");
+        continue;
+      }
+
+      const data = await resp.json();
+      appendContext(file.name, await readFileText(file));
+    } catch (e) {
+      alert(`Upload error: ${e.message}`);
+    }
+  }
+  // Reset input so same file can be re-selected
+  document.getElementById("context-file").value = "";
+}
+
+function readFileText(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsText(file);
+  });
+}
+
+function appendContext(filename, text) {
+  clearPlaceholder(contextListEl);
+  const card = document.createElement("div");
+  card.className = "context-card";
+  card.innerHTML = `<div class="context-filename">${escapeHtml(filename)}</div><pre class="context-text">${escapeHtml(text)}</pre>`;
+  contextListEl.appendChild(card);
 }
 
 // --- Init ---

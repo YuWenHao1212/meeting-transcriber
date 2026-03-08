@@ -123,6 +123,55 @@ header h1 {
   font-size: 14px;
 }
 
+/* Upload button in panel header */
+.panel h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-btn {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.upload-btn:hover {
+  color: var(--accent-green);
+  background: rgba(0, 217, 126, 0.1);
+}
+
+/* Context cards */
+.context-card {
+  background: rgba(0, 217, 126, 0.05);
+  border: 1px solid rgba(0, 217, 126, 0.2);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.context-filename {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-green);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.context-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
 /* Transcript lines */
 .transcript-line {
   padding: 8px 0;
@@ -158,6 +207,18 @@ header h1 {
   color: var(--accent);
   text-transform: uppercase;
   margin-bottom: 4px;
+}
+
+.summary-card {
+  background: rgba(0, 217, 126, 0.1);
+  border-color: rgba(0, 217, 126, 0.3);
+}
+
+.summary-text {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @keyframes fadeIn {

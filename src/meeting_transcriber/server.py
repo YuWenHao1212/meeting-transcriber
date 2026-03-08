@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -338,6 +338,26 @@ def create_app(
         "duration": round(duration, 1),
       }
     )
+
+  @app.post("/api/context/upload")
+  async def upload_context(file: UploadFile) -> JSONResponse:
+    """Upload a context/playbook file from the browser."""
+    content = (await file.read()).decode("utf-8", errors="replace")
+    if not content.strip():
+      return JSONResponse(
+        {"error": "Empty file"},
+        status_code=400,
+      )
+    session["context"].append(content)
+    session["_ws_queue"].append({
+      "type": "context",
+      "text": content,
+      "filename": file.filename or "uploaded",
+    })
+    return JSONResponse({
+      "filename": file.filename,
+      "length": len(content),
+    })
 
   @app.get("/api/status")
   async def get_status() -> JSONResponse:
