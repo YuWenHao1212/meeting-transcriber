@@ -48,6 +48,9 @@ function handleMessage(msg) {
     case "transcript":
       appendTranscript(msg.timestamp || "", msg.text || "");
       break;
+    case "transcript_partial":
+      updatePartialTranscript(msg.text || "");
+      break;
     case "coaching":
       appendCoaching(msg.text || "");
       break;
@@ -75,11 +78,32 @@ function handleMessage(msg) {
 // --- Transcript ---
 function appendTranscript(timestamp, text) {
   clearPlaceholder(transcriptEl);
+  // Remove any existing partial line (replaced by final result)
+  removePartialLine();
   const line = document.createElement("div");
   line.className = "transcript-line";
   line.innerHTML = `<span class="timestamp">${timestamp}</span><span class="text">${escapeHtml(text)}</span>`;
   transcriptEl.appendChild(line);
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+function updatePartialTranscript(text) {
+  clearPlaceholder(transcriptEl);
+  let partial = transcriptEl.querySelector(".transcript-line-partial");
+  if (!partial) {
+    partial = document.createElement("div");
+    partial.className = "transcript-line transcript-line-partial";
+    transcriptEl.appendChild(partial);
+  }
+  partial.innerHTML = `<span class="timestamp" style="opacity:0.5">...</span><span class="text" style="opacity:0.7">${escapeHtml(text)}</span>`;
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+function removePartialLine() {
+  const partial = transcriptEl.querySelector(".transcript-line-partial");
+  if (partial) {
+    partial.remove();
+  }
 }
 
 // --- Coaching ---
@@ -147,6 +171,8 @@ async function stopRecording() {
     return;
   }
 
+  // Remove any lingering partial transcript on stop
+  removePartialLine();
   setRecordingUI(false);
   stopTimer();
 }

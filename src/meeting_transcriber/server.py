@@ -15,6 +15,11 @@ from pydantic import BaseModel
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+# Audio send interval for realtime streaming (seconds)
+_REALTIME_SEND_INTERVAL = 0.1
+# PCM16 16kHz mono: 16000 samples/sec * 2 bytes/sample * 0.1s = 3200 bytes
+_REALTIME_CHUNK_BYTES = 3200
+
 
 class StartRequest(BaseModel):
   context_paths: list[str] = []
@@ -41,6 +46,7 @@ def _new_session() -> dict[str, Any]:
     "_thread": None,
     "recorder": None,
     "audio_path": None,
+    "_realtime_streamer": None,
   }
 
 
@@ -115,6 +121,123 @@ def _recording_loop(
     except Exception as e:
       print(f"[recording] Error: {e}")
       session["_ws_queue"].append({"type": "error", "text": str(e)})
+
+
+def _recording_loop_realtime(
+  session: dict[str, Any],
+  language: str,
+) -> None:
+  """Background thread: stream PCM audio to Qwen3-ASR realtime WebSocket."""
+  import numpy as np
+  import sounddevice as sd
+
+  from meeting_transcriber.engines.qwen_realtime import QwenRealtimeStreamer
+
+  def on_partial(text: str) -> None:
+    session["_ws_queue"].append(
+      {
+        "type": "transcript_partial",
+        "text": text,
+      }
+    )
+
+  def on_final(text: str) -> None:
+    elapsed = _elapsed(session)
+    mm = int(elapsed) // 60
+    ss = int(elapsed) % 60
+    timestamp_str = f"{mm:02d}:{ss:02d}"
+
+    session["transcript_chunks"].append(text)
+    # Estimate cost from elapsed time
+    duration_min = elapsed / 60.0
+    session["total_cost"] = duration_min * 0.0054
+
+    session["_ws_queue"].append(
+      {
+        "type": "transcript",
+        "timestamp": timestamp_str,
+        "text": text,
+      }
+    )
+    session["_ws_queue"].append(
+      {
+        "type": "cost",
+        "value": session["total_cost"],
+      }
+    )
+
+    # Run coaching prompt pipeline
+    _run_prompter(session, text, session.get("context_chunks", []))
+
+  def on_error(text: str) -> None:
+    session["_ws_queue"].append({"type": "error", "text": text})
+
+  # Initialize streamer
+  streamer = QwenRealtimeStreamer(
+    language=language,
+    on_partial=on_partial,
+    on_final=on_final,
+    on_error=on_error,
+  )
+  session["_realtime_streamer"] = streamer
+
+  try:
+    streamer.start()
+  except Exception as e:
+    print(f"[realtime] Streamer start error: {e}")
+    session["_ws_queue"].append({"type": "error", "text": f"Realtime error: {e}"})
+    return
+
+  print("[realtime] Started. Streaming PCM to Qwen3-ASR realtime.")
+
+  # Accumulate PCM from sounddevice callback
+  audio_buffer = bytearray()
+  buffer_lock = threading.Lock()
+
+  def audio_callback(
+    indata: np.ndarray,
+    frame_count: int,
+    time_info: object,
+    status: object,
+  ) -> None:
+    # Convert float32 [-1,1] to int16 PCM
+    pcm = (indata * 32767).astype(np.int16).tobytes()
+    with buffer_lock:
+      audio_buffer.extend(pcm)
+
+  try:
+    stream = sd.InputStream(
+      samplerate=16000,
+      channels=1,
+      dtype="float32",
+      callback=audio_callback,
+    )
+    stream.start()
+  except Exception as e:
+    print(f"[realtime] Audio stream error: {e}")
+    session["_ws_queue"].append({"type": "error", "text": f"Audio error: {e}"})
+    streamer.stop()
+    return
+
+  # Send audio chunks at regular intervals
+  try:
+    while session["active"] and streamer.is_running:
+      time.sleep(_REALTIME_SEND_INTERVAL)
+      with buffer_lock:
+        if len(audio_buffer) >= _REALTIME_CHUNK_BYTES:
+          chunk = bytes(audio_buffer[:_REALTIME_CHUNK_BYTES])
+          del audio_buffer[:_REALTIME_CHUNK_BYTES]
+        elif len(audio_buffer) > 0:
+          chunk = bytes(audio_buffer)
+          audio_buffer.clear()
+        else:
+          continue
+      streamer.send_audio(chunk)
+  finally:
+    stream.stop()
+    stream.close()
+    streamer.stop()
+    session["_realtime_streamer"] = None
 
 
 def _transcribe_new_chunks(
@@ -323,11 +446,19 @@ def create_app(
 
     # Start recording in background thread
     if app.state.record:
-      thread = threading.Thread(
-        target=_recording_loop,
-        args=(session, app.state.engine_name, app.state.language, app.state.chunk_duration),
-        daemon=True,
-      )
+      use_realtime = app.state.engine_name == "qwen"
+      if use_realtime:
+        thread = threading.Thread(
+          target=_recording_loop_realtime,
+          args=(session, app.state.language),
+          daemon=True,
+        )
+      else:
+        thread = threading.Thread(
+          target=_recording_loop,
+          args=(session, app.state.engine_name, app.state.language, app.state.chunk_duration),
+          daemon=True,
+        )
       session["_thread"] = thread
       thread.start()
 
@@ -342,6 +473,11 @@ def create_app(
       )
     duration = _elapsed(session)
     session["active"] = False
+
+    # Stop realtime streamer if active
+    if session.get("_realtime_streamer"):
+      session["_realtime_streamer"].stop()
+      session["_realtime_streamer"] = None
 
     if session.get("recorder"):
       session["recorder"].stop()

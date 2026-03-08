@@ -33,6 +33,7 @@ dependencies = [
   "uvicorn[standard]>=0.20",
   "python-multipart>=0.0.6",
   "opencc-python-reimplemented>=0.1.7",
+  "websocket-client>=1.7",
 ]
 
 [project.optional-dependencies]
