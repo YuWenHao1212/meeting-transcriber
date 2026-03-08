@@ -85,9 +85,11 @@ def _build_prompt(recent_transcript: str, playbook_text: str) -> str:
     recent_transcript,
   ]
   if playbook_text.strip():
-    parts.extend([
-      "",
-      "## Playbook",
-      playbook_text[:4000],
-    ])
+    parts.extend(
+      [
+        "",
+        "## Playbook",
+        playbook_text[:4000],
+      ]
+    )
   return "\n".join(parts)
