@@ -7,10 +7,10 @@ from typing import Annotated, Optional
 
 import typer
 from dotenv import load_dotenv
-
-load_dotenv()
 from rich.console import Console
 from rich.table import Table
+
+load_dotenv()
 
 app = typer.Typer(
   name="mt",
