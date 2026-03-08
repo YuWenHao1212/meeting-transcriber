@@ -221,6 +221,10 @@ def serve(
   ] = None,
   engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "openai",
   language: Annotated[str, typer.Option("--language", "-l", help="Language code")] = "zh",
+  record: Annotated[
+    bool,
+    typer.Option("--record", "-r", help="Enable live recording and transcription"),
+  ] = False,
 ) -> None:
   """Start the Web UI for real-time meeting transcription."""
   import uvicorn
@@ -231,6 +235,7 @@ def serve(
     context_paths=[str(p) for p in context] if context else [],
     engine_name=engine,
     language=language,
+    record=record,
   )
   console.print("[bold green]Meeting Transcriber Web UI[/]")
   console.print(f"Open [link=http://localhost:{port}]http://localhost:{port}[/link]")
