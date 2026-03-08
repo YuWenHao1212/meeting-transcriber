@@ -225,6 +225,10 @@ def serve(
     bool,
     typer.Option("--record", "-r", help="Enable live recording and transcription"),
   ] = False,
+  chunk_duration: Annotated[
+    int,
+    typer.Option("--chunk-duration", help="Seconds per transcription chunk"),
+  ] = 5,
 ) -> None:
   """Start the Web UI for real-time meeting transcription."""
   import uvicorn
@@ -236,6 +240,7 @@ def serve(
     engine_name=engine,
     language=language,
     record=record,
+    chunk_duration=chunk_duration,
   )
   console.print("[bold green]Meeting Transcriber Web UI[/]")
   console.print(f"Open [link=http://localhost:{port}]http://localhost:{port}[/link]")

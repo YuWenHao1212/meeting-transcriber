@@ -75,11 +75,24 @@ def _recording_loop(
   timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
   audio_path = Path(tempfile.mkdtemp()) / f"live-{timestamp}.wav"
 
-  engine = get_engine(engine_name)
-  recorder = Recorder()
-  recorder.start(audio_path)
+  try:
+    engine = get_engine(engine_name)
+  except Exception as e:
+    print(f"[recording] Engine init error: {e}")
+    session["_ws_queue"].append({"type": "error", "text": f"Engine error: {e}"})
+    return
+
+  try:
+    recorder = Recorder()
+    recorder.start(audio_path)
+  except Exception as e:
+    print(f"[recording] Recorder start error: {e}")
+    session["_ws_queue"].append({"type": "error", "text": f"Recorder error: {e}"})
+    return
+
   session["audio_path"] = audio_path
   session["recorder"] = recorder
+  print(f"[recording] Started. Audio: {audio_path}, Engine: {engine_name}")
 
   chunk_index = 0
   while session["active"]:
@@ -88,6 +101,7 @@ def _recording_loop(
       break
     try:
       chunks = chunk_audio(audio_path, chunk_duration=chunk_duration, overlap=2)
+      print(f"[recording] Chunks: {len(chunks)}, new from index {chunk_index}")
       _transcribe_new_chunks(
         session,
         engine,
@@ -99,6 +113,7 @@ def _recording_loop(
       )
       chunk_index = len(chunks)
     except Exception as e:
+      print(f"[recording] Error: {e}")
       session["_ws_queue"].append({"type": "error", "text": str(e)})
 
 
@@ -254,6 +269,7 @@ def create_app(
   engine_name: str = "openai",
   language: str = "zh",
   record: bool = False,
+  chunk_duration: int = 5,
 ) -> FastAPI:
   """Factory: create a configured FastAPI application."""
   app = FastAPI(title="Meeting Transcriber")
@@ -268,6 +284,7 @@ def create_app(
   app.state.engine_name = engine_name
   app.state.language = language
   app.state.record = record
+  app.state.chunk_duration = chunk_duration
   app.state.session = session
 
   # --- Static files ---
@@ -308,7 +325,7 @@ def create_app(
     if app.state.record:
       thread = threading.Thread(
         target=_recording_loop,
-        args=(session, app.state.engine_name, app.state.language),
+        args=(session, app.state.engine_name, app.state.language, app.state.chunk_duration),
         daemon=True,
       )
       session["_thread"] = thread

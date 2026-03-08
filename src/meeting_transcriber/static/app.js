@@ -63,6 +63,9 @@ function handleMessage(msg) {
     case "context":
       appendContext(msg.filename || "Playbook", msg.text || "");
       break;
+    case "error":
+      appendError(msg.text || "Unknown error");
+      break;
     case "status":
       // Status update from server
       break;
@@ -223,6 +226,16 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+// --- Errors ---
+function appendError(text) {
+  clearPlaceholder(transcriptEl);
+  const line = document.createElement("div");
+  line.className = "transcript-line error-line";
+  line.innerHTML = `<span class="timestamp" style="color:#e94560">ERROR</span><span class="text" style="color:#e94560">${escapeHtml(text)}</span>`;
+  transcriptEl.appendChild(line);
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
 // --- Context upload ---

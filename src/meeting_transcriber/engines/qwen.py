@@ -115,29 +115,42 @@ class QwenEngine(BaseEngine):
           time.sleep(_BACKOFF_BASE**attempt)
     raise RuntimeError(f"Qwen transcription failed after {_MAX_RETRIES} attempts: {last_error}")
 
+  def _to_traditional(self, text: str) -> str:
+    """Convert simplified Chinese to traditional Chinese (Taiwan)."""
+    try:
+      from opencc import OpenCC
+
+      cc = OpenCC("s2twp")  # Simplified → Traditional (Taiwan phrases)
+      return cc.convert(text)
+    except ImportError:
+      return text
+
   def _parse_response(self, response, duration: float) -> TranscriptResult:
     """Parse chat completion response into TranscriptResult."""
     text = ""
     if response.choices and response.choices[0].message:
       text = response.choices[0].message.content or ""
 
+    # Convert simplified to traditional Chinese (Taiwan)
+    text = self._to_traditional(text.strip())
+
     # Estimate cost from duration (25 tokens/sec audio)
     cost = (duration / 60.0) * self.cost_per_minute
 
     # Qwen3-ASR returns plain text, no segment-level timestamps in sync mode
     segments = []
-    if text.strip():
+    if text:
       segments = [
         Segment(
           start=0.0,
           end=duration,
-          text=text.strip(),
+          text=text,
         )
       ]
 
     return TranscriptResult(
       segments=segments,
-      full_text=text.strip(),
+      full_text=text,
       duration=duration,
       cost=cost,
       engine=self.name,
