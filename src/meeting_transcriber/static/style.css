@@ -97,6 +97,11 @@ header h1 {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+.badge-paused {
+  background: var(--accent);
+  color: #fff;
+}
+
 .cost {
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 14px;
@@ -525,6 +530,11 @@ footer {
 }
 
 .btn-stop {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-end {
   background: var(--red);
   color: #fff;
 }

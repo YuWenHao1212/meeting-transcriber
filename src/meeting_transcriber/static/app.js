@@ -16,7 +16,8 @@ const coachingOpusPanel = document.getElementById("coaching-opus-panel");
 const actionList = document.getElementById("action-list");
 const actionItems = document.getElementById("action-items");
 const btnStart = document.getElementById("btn-start");
-const btnStop = document.getElementById("btn-stop");
+const btnPause = document.getElementById("btn-pause");
+const btnEnd = document.getElementById("btn-end");
 const btnCoachNano = document.getElementById("btn-coach-nano");
 const btnCoachOpus = document.getElementById("btn-coach-opus");
 const btnCoachBoth = document.getElementById("btn-coach-both");
@@ -324,20 +325,45 @@ async function startRecording() {
     return;
   }
 
-  setRecordingUI(true);
+  setUI("recording");
   startTimer();
 }
 
-async function stopRecording() {
+async function pauseRecording() {
+  if (sessionState === "paused") {
+    // Resume
+    const resp = await fetch("/api/resume", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "Failed to resume");
+      return;
+    }
+    setUI("recording");
+    startTimer();
+  } else {
+    // Pause
+    const resp = await fetch("/api/pause", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "Failed to pause");
+      return;
+    }
+    removePartialLine();
+    setUI("paused");
+    stopTimer();
+  }
+}
+
+async function endRecording() {
   const resp = await fetch("/api/stop", { method: "POST" });
   if (!resp.ok) {
     const err = await resp.json();
-    alert(err.error || "Failed to stop");
+    alert(err.error || "Failed to end");
     return;
   }
 
   removePartialLine();
-  setRecordingUI(false);
+  setUI("idle");
   stopTimer();
 }
 
@@ -433,20 +459,29 @@ function showSummary(markdown) {
 // --- UI helpers ---
 let hasTranscript = false;
 
-function setRecordingUI(recording) {
-  btnStart.disabled = recording;
-  btnStop.disabled = !recording;
-  // Coach buttons: enabled when recording OR when transcript exists from a previous session
-  const coachEnabled = recording || hasTranscript;
-  btnCoachNano.disabled = !coachEnabled;
-  btnCoachOpus.disabled = !coachEnabled;
-  btnCoachBoth.disabled = !coachEnabled;
-  btnSummarize.disabled = recording;
-  btnSave.disabled = recording;
+// state: "idle" | "recording" | "paused"
+let sessionState = "idle";
 
-  if (recording) {
+function setUI(state) {
+  sessionState = state;
+  const hasData = hasTranscript;
+
+  btnStart.disabled = state !== "idle";
+  btnPause.disabled = state === "idle";
+  btnPause.textContent = state === "paused" ? "Resume" : "Pause";
+  btnEnd.disabled = state === "idle";
+  btnCoachNano.disabled = state === "idle" && !hasData;
+  btnCoachOpus.disabled = state === "idle" && !hasData;
+  btnCoachBoth.disabled = state === "idle" && !hasData;
+  btnSummarize.disabled = false;
+  btnSave.disabled = !hasData;
+
+  if (state === "recording") {
     statusBadge.textContent = "Recording";
     statusBadge.className = "badge badge-recording";
+  } else if (state === "paused") {
+    statusBadge.textContent = "Paused";
+    statusBadge.className = "badge badge-paused";
   } else {
     statusBadge.textContent = "Idle";
     statusBadge.className = "badge badge-idle";

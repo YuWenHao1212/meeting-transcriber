@@ -695,11 +695,86 @@ def create_app(
 
     return JSONResponse({"session_id": str(int(session["start_time"])), "stereo": use_stereo})
 
-  @app.post("/api/stop")
-  async def stop_session() -> JSONResponse:
+  @app.post("/api/pause")
+  async def pause_session() -> JSONResponse:
+    """Pause recording but keep session data."""
     if not session["active"]:
       return JSONResponse(
         {"error": "Not recording"},
+        status_code=404,
+      )
+    session["active"] = False
+
+    # Stop realtime streamer(s) but keep session data
+    rs = session.get("_realtime_streamer")
+    if rs:
+      if isinstance(rs, list):
+        for s in rs:
+          s.stop()
+      else:
+        rs.stop()
+      session["_realtime_streamer"] = None
+
+    if session.get("recorder"):
+      session["recorder"].stop()
+    if session.get("_thread"):
+      session["_thread"].join(timeout=5)
+      session["_thread"] = None
+
+    # Track elapsed time so we can resume the timer
+    session["_paused_elapsed"] = _elapsed(session)
+
+    return JSONResponse({"status": "paused"})
+
+  @app.post("/api/resume")
+  async def resume_session() -> JSONResponse:
+    """Resume a paused recording session."""
+    if session["active"]:
+      return JSONResponse(
+        {"error": "Already recording"},
+        status_code=409,
+      )
+    if session["start_time"] is None:
+      return JSONResponse(
+        {"error": "No session to resume"},
+        status_code=404,
+      )
+
+    session["active"] = True
+    # Adjust start_time so elapsed time continues from where we paused
+    paused_elapsed = session.pop("_paused_elapsed", 0)
+    session["start_time"] = time.time() - paused_elapsed
+
+    # Restart recording thread
+    if app.state.record:
+      use_realtime = app.state.engine_name == "qwen"
+      use_stereo = session.get("_stereo", False)
+      if use_realtime:
+        thread = threading.Thread(
+          target=_recording_loop_realtime,
+          args=(session, app.state.language, use_stereo),
+          daemon=True,
+        )
+      else:
+        thread = threading.Thread(
+          target=_recording_loop,
+          args=(
+            session, app.state.engine_name,
+            app.state.language, app.state.chunk_duration,
+          ),
+          daemon=True,
+        )
+      session["_thread"] = thread
+      thread.start()
+
+    return JSONResponse({"status": "resumed"})
+
+  @app.post("/api/stop")
+  async def stop_session() -> JSONResponse:
+    """End the session completely."""
+    if not session["active"] and session["start_time"] is None:
+      return JSONResponse(
+        {"error": "No active session"},
         status_code=404,
       )
     duration = _elapsed(session)
@@ -727,6 +802,7 @@ def create_app(
 
     session["start_time"] = None
     session["_stereo"] = False
+    session.pop("_paused_elapsed", None)
     return JSONResponse(
       {
         "status": "stopped",
