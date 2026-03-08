@@ -215,26 +215,26 @@ def live(
   signal.pause()
 
 
-@app.command()
+@app.command(name="start")
 def serve(
   port: Annotated[int, typer.Option("--port", "-p", help="Server port")] = 8765,
   context: Annotated[
     Optional[list[Path]],
     typer.Option("--context", "-c", help="Context files"),
   ] = None,
-  engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "openai",
+  engine: Annotated[str, typer.Option("--engine", "-e", help="STT engine")] = "qwen",
   language: Annotated[str, typer.Option("--language", "-l", help="Language code")] = "zh",
   record: Annotated[
     bool,
-    typer.Option("--record", "-r", help="Enable live recording and transcription"),
-  ] = False,
+    typer.Option("--record/--no-record", "-r", help="Enable live recording and transcription"),
+  ] = True,
   chunk_duration: Annotated[
     int,
     typer.Option("--chunk-duration", help="Seconds per transcription chunk"),
   ] = 5,
   stereo: Annotated[
     bool,
-    typer.Option("--stereo", help="Stereo mode: left=mic (our side), right=system audio (other side)"),
+    typer.Option("--stereo", help="Stereo: split mic (ours) and system audio (theirs)"),
   ] = False,
 ) -> None:
   """Start the Web UI for real-time meeting transcription."""
@@ -250,8 +250,11 @@ def serve(
     chunk_duration=chunk_duration,
     stereo=stereo,
   )
+  import webbrowser
+
   console.print("[bold green]Meeting Transcriber Web UI[/]")
   console.print(f"Open [link=http://localhost:{port}]http://localhost:{port}[/link]")
+  webbrowser.open(f"http://localhost:{port}")
   uvicorn.run(web_app, host="0.0.0.0", port=port)
 
 

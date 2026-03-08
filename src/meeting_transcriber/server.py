@@ -645,7 +645,11 @@ def create_app(
         ok = _set_output_device(_MULTI_OUTPUT_DEVICE)
         if not ok:
           return JSONResponse(
-            {"error": f"無法切換系統輸出到「{_MULTI_OUTPUT_DEVICE}」，請確認 Audio MIDI Setup 已建立多重輸出裝置，並已安裝 SwitchAudioSource (brew install switchaudio-osx)"},
+            {"error": (
+              f"無法切換系統輸出到「{_MULTI_OUTPUT_DEVICE}」，"
+              "請確認 Audio MIDI Setup 已建立多重輸出裝置，"
+              "並已安裝 SwitchAudioSource (brew install switchaudio-osx)"
+            )},
             status_code=500,
           )
 

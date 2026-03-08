@@ -98,7 +98,10 @@ def run_quick_coaching(
   """Quick coaching via Sonnet. Runs in background thread."""
   thread = threading.Thread(
     target=_run_coaching,
-    args=(recent_transcript, playbook_text, callback, SONNET_MODEL, _SHARED_SYSTEM, QUICK_MAX_TOKENS),
+    args=(
+      recent_transcript, playbook_text, callback,
+      SONNET_MODEL, _SHARED_SYSTEM, QUICK_MAX_TOKENS,
+    ),
     daemon=True,
   )
   thread.start()
