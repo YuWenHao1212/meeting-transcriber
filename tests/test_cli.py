@@ -1,5 +1,6 @@
 """Tests for CLI commands."""
 
+import re
 from unittest.mock import patch
 
 from typer.testing import CliRunner
@@ -8,6 +9,11 @@ from meeting_transcriber.cli import app
 from meeting_transcriber.models import TranscriptResult
 
 runner = CliRunner()
+
+
+def _strip_ansi(text: str) -> str:
+  """Remove ANSI escape codes from text."""
+  return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 class TestCliHelp:
@@ -23,25 +29,28 @@ class TestCliHelp:
   def test_record_help(self):
     result = runner.invoke(app, ["record", "--help"])
     assert result.exit_code == 0
-    assert "--device" in result.output
-    assert "--output" in result.output
+    output = _strip_ansi(result.output)
+    assert "--device" in output
+    assert "--output" in output
 
   def test_transcribe_help(self):
     result = runner.invoke(app, ["transcribe", "--help"])
     assert result.exit_code == 0
-    assert "--language" in result.output
-    assert "--engine" in result.output
+    output = _strip_ansi(result.output)
+    assert "--language" in output
+    assert "--engine" in output
 
   def test_summarize_help(self):
     result = runner.invoke(app, ["summarize", "--help"])
     assert result.exit_code == 0
-    assert "--playbook" in result.output
+    assert "--playbook" in _strip_ansi(result.output)
 
   def test_live_help(self):
     result = runner.invoke(app, ["live", "--help"])
     assert result.exit_code == 0
-    assert "--engine" in result.output
-    assert "--chunk-duration" in result.output
+    output = _strip_ansi(result.output)
+    assert "--engine" in output
+    assert "--chunk-duration" in output
 
 
 class TestTranscribeCommand:
