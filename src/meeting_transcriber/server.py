@@ -94,6 +94,9 @@ def _new_session() -> dict[str, Any]:
     "recorder": None,
     "audio_path": None,
     "_realtime_streamer": None,
+    "cleaned_transcript": None,
+    "_clean_cursor": 0,
+    "_cleaning": False,
   }
 
 
@@ -535,6 +538,68 @@ def _run_prompter(
     pass  # detect_action_items already handles errors internally
 
 
+def _get_coach_text(session: dict[str, Any], n_lines: int) -> str:
+  """Get recent transcript text for coaching.
+
+  Combines cleaned transcript with any raw chunks added after cleaning,
+  then takes the last n_lines.
+  """
+  if session.get("cleaned_transcript"):
+    cleaned_lines = [line for line in session["cleaned_transcript"].split("\n") if line.strip()]
+    # Append raw chunks that arrived after the last clean
+    clean_cursor = session.get("_clean_cursor", 0)
+    new_raw = session["transcript_chunks"][clean_cursor:]
+    all_lines = cleaned_lines + new_raw
+    return "\n".join(all_lines[-n_lines:])
+  recent = session["transcript_chunks"][-n_lines:] if session["transcript_chunks"] else []
+  return "\n".join(recent)
+
+
+def _extract_transcript_from_file(filepath: Path) -> str | None:
+  """Extract transcript section from a saved meeting notes .md file."""
+  if not filepath.exists():
+    return None
+  content = filepath.read_text(encoding="utf-8")
+  # Find the ## Transcript section
+  for marker in ("## Transcript (Cleaned)", "## Transcript"):
+    idx = content.find(marker)
+    if idx != -1:
+      # Extract everything after the header line
+      after_header = content[idx + len(marker) :].lstrip("\n")
+      # Transcript goes to end of file (or next ## section)
+      next_section = after_header.find("\n## ")
+      if next_section != -1:
+        return after_header[:next_section].strip()
+      return after_header.strip()
+  return None
+
+
+def _find_saved_notes(session: dict[str, Any]) -> Path | None:
+  """Find the most recent saved meeting notes file in the save directory."""
+  save_dir = _get_save_directory(session)
+  if not save_dir.is_dir():
+    return None
+  notes = sorted(save_dir.glob("*meeting-notes.md"), reverse=True)
+  return notes[0] if notes else None
+
+
+def _extract_transcript_text(session: dict[str, Any]) -> str | None:
+  """Get transcript text: prefer saved file, fallback to session chunks."""
+  # Try saved meeting notes file first
+  saved = _find_saved_notes(session)
+  if saved:
+    text = _extract_transcript_from_file(saved)
+    if text:
+      return text
+
+  # Fallback to session transcript_chunks
+  all_chunks = session["transcript_chunks"]
+  if all_chunks:
+    return "\n".join(all_chunks)
+
+  return None
+
+
 def _build_meeting_markdown(
   session: dict[str, Any],
   engine_name: str,
@@ -559,12 +624,17 @@ def _build_meeting_markdown(
     lines.append(session["summary"])
     lines.append("")
 
-  # Transcript appended at the end
+  # Transcript: prefer cleaned, fallback to raw
   lines.append("---")
   lines.append("")
-  lines.append("## Transcript")
-  lines.append("")
-  lines.append("\n".join(session["transcript_chunks"]))
+  if session.get("cleaned_transcript"):
+    lines.append("## Transcript (Cleaned)")
+    lines.append("")
+    lines.append(session["cleaned_transcript"])
+  elif session["transcript_chunks"]:
+    lines.append("## Transcript")
+    lines.append("")
+    lines.append("\n".join(session["transcript_chunks"]))
   lines.append("")
 
   return "\n".join(lines)
@@ -675,6 +745,8 @@ def create_app(
     session["_ws_queue"] = []
     session["_stereo"] = use_stereo
     session["summary"] = ""
+    session["cleaned_transcript"] = None
+    session["_clean_cursor"] = 0
     session["_summary_cursor"] = 0
 
     # Reset live transcript file for Claude Code CLI
@@ -737,6 +809,33 @@ def create_app(
 
     # Track elapsed time so we can resume the timer
     session["_paused_elapsed"] = _elapsed(session)
+
+    # Auto-clean transcript on pause if there are chunks
+    if session["transcript_chunks"] and not session.get("_cleaning"):
+      async def _auto_clean():
+        from meeting_transcriber.summarizer import clean_transcript
+
+        session["_cleaning"] = True
+        try:
+          raw_text = "\n".join(session["transcript_chunks"])
+          chunk_count = len(session["transcript_chunks"])
+          playbook_text = "\n\n".join(session["context"]) if session["context"] else None
+          print(f"[auto-clean] Started on pause, {len(raw_text)} chars")
+          cleaned = await asyncio.to_thread(clean_transcript, raw_text, playbook=playbook_text)
+          session["cleaned_transcript"] = cleaned
+          session["_clean_cursor"] = chunk_count
+          session["_ws_queue"].append({"type": "cleaned_transcript", "text": cleaned})
+          # Auto-save
+          save_dir = _get_save_directory(session)
+          save_path = save_dir / "cleaned-transcript.md"
+          save_path.write_text(cleaned, encoding="utf-8")
+          print(f"[auto-clean] Done, {len(cleaned)} chars, saved to {save_path}")
+        except Exception as e:
+          print(f"[auto-clean] Error: {e}")
+        finally:
+          session["_cleaning"] = False
+
+      asyncio.create_task(_auto_clean())
 
     return JSONResponse({"status": "paused"})
 
@@ -877,7 +976,11 @@ def create_app(
         status_code=400,
       )
 
-    new_text = "\n".join(new_chunks)
+    # Prefer cleaned transcript if available
+    if session.get("cleaned_transcript"):
+      new_text = session["cleaned_transcript"]
+    else:
+      new_text = "\n".join(new_chunks)
     playbook_text = "\n\n".join(session["context"]) if session["context"] else None
     existing_summary = session.get("summary", "")
 
@@ -905,19 +1008,81 @@ def create_app(
       }
     )
 
+  @app.post("/api/clean-transcript")
+  async def clean_transcript_endpoint() -> JSONResponse:
+    """Clean raw ASR transcript using LLM.
+
+    Reads from saved meeting notes file if available,
+    otherwise falls back to session transcript_chunks.
+    """
+    from meeting_transcriber.summarizer import clean_transcript
+
+    if session.get("_cleaning"):
+      return JSONResponse(
+        {"error": "Clean already in progress"},
+        status_code=409,
+      )
+
+    raw_text = _extract_transcript_text(session)
+    if not raw_text:
+      return JSONResponse(
+        {"error": "No transcript to clean"},
+        status_code=400,
+      )
+
+    session["_cleaning"] = True
+    print(f"[clean] Transcript loaded: {len(raw_text)} chars")
+    playbook_text = "\n\n".join(session["context"]) if session["context"] else None
+
+    try:
+      # Run in thread to avoid blocking the async event loop
+      cleaned = await asyncio.to_thread(
+        clean_transcript, raw_text, playbook=playbook_text
+      )
+      print(f"[clean] Done: {len(cleaned)} chars")
+    except Exception as e:
+      session["_cleaning"] = False
+      print(f"[clean] Error: {e}")
+      return JSONResponse(
+        {"error": f"Clean failed: {e}"},
+        status_code=500,
+      )
+    session["_cleaning"] = False
+
+    # Store cleaned transcript and record cursor position
+    session["cleaned_transcript"] = cleaned
+    session["_clean_cursor"] = len(session["transcript_chunks"])
+
+    # Also populate transcript_chunks if they were empty (loaded from file)
+    if not session["transcript_chunks"]:
+      session["transcript_chunks"] = raw_text.split("\n")
+      session["_summary_cursor"] = 0
+
+    # Auto-save cleaned transcript to file
+    save_dir = _get_save_directory(session)
+    save_path = save_dir / "cleaned-transcript.md"
+    save_path.write_text(cleaned, encoding="utf-8")
+    print(f"[clean] Saved to {save_path}")
+
+    # Broadcast to WebSocket clients
+    session["_ws_queue"].append({"type": "cleaned_transcript", "text": cleaned})
+
+    return JSONResponse({"cleaned": cleaned, "saved_to": str(save_path)})
+
   @app.post("/api/coach")
   async def coach_me() -> JSONResponse:
     """Quick coaching via Anthropic Sonnet."""
     from meeting_transcriber.coach import run_quick_coaching
 
-    recent = session["transcript_chunks"][-15:] if session["transcript_chunks"] else []
-    recent_text = "\n".join(recent)
+    recent_text = _get_coach_text(session, 15)
     if not recent_text.strip():
       return JSONResponse(
         {"error": "No recent transcript to analyze"},
         status_code=400,
       )
 
+    source = "cleaned" if session.get("cleaned_transcript") else "raw"
+    print(f"[coach] Using {source} transcript, {len(recent_text)} chars")
     playbook_text = "\n\n".join(session["context"]) if session["context"] else ""
 
     def on_result(text: str) -> None:
@@ -932,16 +1097,16 @@ def create_app(
     """Deep coaching via Anthropic Opus."""
     from meeting_transcriber.coach import run_deep_coaching
 
-    recent = session["transcript_chunks"][-30:] if session["transcript_chunks"] else []
-    recent_text = "\n".join(recent)
+    recent_text = _get_coach_text(session, 30)
     if not recent_text.strip():
       return JSONResponse(
         {"error": "No recent transcript to analyze"},
         status_code=400,
       )
 
+    source = "cleaned" if session.get("cleaned_transcript") else "raw"
+    print(f"[coach-opus] Using {source} transcript, {len(recent_text)} chars")
     playbook_text = "\n\n".join(session["context"]) if session["context"] else ""
-    print(f"[coach-opus] Sending {len(recent)} chunks to LLM:\n{recent_text[:500]}")
 
     def on_result(text: str) -> None:
       session["_ws_queue"].append({"type": "coaching_opus", "text": text})
@@ -982,8 +1147,12 @@ def create_app(
 
   @app.post("/api/save")
   async def save_notes() -> JSONResponse:
-    text = "\n".join(session["transcript_chunks"])
-    if not text:
+    has_data = (
+      session["transcript_chunks"]
+      or session.get("cleaned_transcript")
+      or session.get("summary")
+    )
+    if not has_data:
       return JSONResponse(
         {"error": "No transcript to save"},
         status_code=400,

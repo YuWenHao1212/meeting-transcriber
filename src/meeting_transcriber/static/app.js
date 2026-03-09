@@ -21,8 +21,12 @@ const btnEnd = document.getElementById("btn-end");
 const btnCoachNano = document.getElementById("btn-coach-nano");
 const btnCoachOpus = document.getElementById("btn-coach-opus");
 const btnCoachBoth = document.getElementById("btn-coach-both");
+const btnClean = document.getElementById("btn-clean");
 const btnSummarize = document.getElementById("btn-summarize");
 const btnSave = document.getElementById("btn-save");
+const transcriptCleanedEl = document.getElementById("transcript-cleaned");
+const tabRaw = document.getElementById("tab-raw");
+const tabCleaned = document.getElementById("tab-cleaned");
 
 // --- Simple Markdown renderer ---
 function renderMarkdown(md) {
@@ -190,6 +194,9 @@ function handleMessage(msg) {
       break;
     case "cost":
       updateCost(msg.value || 0);
+      break;
+    case "cleaned_transcript":
+      showCleanedTranscript(msg.text || "");
       break;
     case "summary":
       showSummary(msg.text || "");
@@ -448,12 +455,88 @@ async function coachBoth() {
   coachOpus();
 }
 
+// --- Clean Transcript ---
+async function cleanTranscript() {
+  btnClean.disabled = true;
+  btnClean.textContent = "Cleaning...";
+  try {
+    const resp = await fetch("/api/clean-transcript", { method: "POST" });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.error || "Nothing to clean");
+      return;
+    }
+    const data = await resp.json();
+    showCleanedTranscript(data.cleaned);
+  } finally {
+    btnClean.disabled = false;
+    btnClean.textContent = "Clean";
+  }
+}
+
+function showCleanedTranscript(text) {
+  clearPlaceholder(transcriptCleanedEl);
+  transcriptCleanedEl.innerHTML = "";
+  const lines = text.split("\n").filter((l) => l.trim());
+  for (const line of lines) {
+    const div = document.createElement("div");
+    div.className = "transcript-line";
+
+    // Parse [timestamp] [speaker] text
+    const match = line.match(/^\[(\d{2}:\d{2})\]\s*(?:\[([^\]]+)\])?\s*(.*)$/);
+    if (match) {
+      const ts = match[1];
+      const speaker = match[2] || "";
+      const txt = match[3] || "";
+      let speakerHtml = "";
+      if (speaker) {
+        const cls = speaker === "\u6211\u65b9" ? "speaker-mine" : "speaker-theirs";
+        speakerHtml = `<span class="speaker-badge ${cls}">${escapeHtml(speaker)}</span>`;
+      }
+      div.innerHTML = `<span class="timestamp">${ts}</span>${speakerHtml}<span class="text">${escapeHtml(txt)}</span>`;
+    } else {
+      div.innerHTML = `<span class="text">${escapeHtml(line)}</span>`;
+    }
+    transcriptCleanedEl.appendChild(div);
+  }
+  // Auto-switch to cleaned view
+  switchTranscriptView("cleaned");
+}
+
+function switchTranscriptView(view) {
+  if (view === "cleaned") {
+    transcriptEl.classList.add("hidden");
+    transcriptCleanedEl.classList.remove("hidden");
+    tabRaw.classList.remove("active");
+    tabCleaned.classList.add("active");
+  } else {
+    transcriptEl.classList.remove("hidden");
+    transcriptCleanedEl.classList.add("hidden");
+    tabRaw.classList.add("active");
+    tabCleaned.classList.remove("active");
+  }
+}
+
 // --- Summary ---
 function showSummary(markdown) {
   const section = document.getElementById("summary-section");
-  const editor = document.getElementById("summary-editor");
+  const rendered = document.getElementById("summary-rendered");
   section.classList.remove("hidden");
-  editor.value = markdown;
+  rendered.innerHTML = `<div class="context-rendered">${renderMarkdown(markdown)}</div>`;
+
+  // Auto-collapse playbook to make room for summary
+  const body = document.getElementById("context-list");
+  const icon = document.getElementById("playbook-icon");
+  body.classList.add("collapsed");
+  icon.textContent = "▶";
+}
+
+// --- Playbook collapse/expand ---
+function togglePlaybook() {
+  const body = document.getElementById("context-list");
+  const icon = document.getElementById("playbook-icon");
+  body.classList.toggle("collapsed");
+  icon.textContent = body.classList.contains("collapsed") ? "▶" : "▼";
 }
 
 // --- UI helpers ---
@@ -473,8 +556,9 @@ function setUI(state) {
   btnCoachNano.disabled = state === "idle" && !hasData;
   btnCoachOpus.disabled = state === "idle" && !hasData;
   btnCoachBoth.disabled = state === "idle" && !hasData;
+  btnClean.disabled = false;
   btnSummarize.disabled = false;
-  btnSave.disabled = !hasData;
+  btnSave.disabled = false;
 
   if (state === "recording") {
     statusBadge.textContent = "Recording";

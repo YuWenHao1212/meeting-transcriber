@@ -1,8 +1,15 @@
-"""Tests for meeting summarization via Anthropic Claude."""
+"""Tests for meeting summarization and transcript cleaning via Claude CLI."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from meeting_transcriber.summarizer import summarize
+from meeting_transcriber.summarizer import (
+  _build_clean_prompt,
+  _build_summarize_prompt,
+  _strip_code_fences,
+  clean_transcript,
+  summarize,
+  summarize_incremental,
+)
 
 SAMPLE_TRANSCRIPT = (
   "Alice: Let's discuss the Q2 roadmap.\n"
@@ -21,214 +28,141 @@ SAMPLE_PLAYBOOK = (
 CUSTOM_TEMPLATE = "## TL;DR\n{summary}\n## Takeaways\n{takeaways}\n"
 
 
-def _make_mock_response(text: str = "# Meeting Summary\n\nMock summary.") -> MagicMock:
-  """Create a mock Anthropic messages.create() response."""
-  content_block = MagicMock()
-  content_block.text = text
-  response = MagicMock()
-  response.content = [content_block]
-  return response
+class TestBuildSummarizePrompt:
+  def test_includes_transcript(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT)
+    assert SAMPLE_TRANSCRIPT in prompt
+
+  def test_includes_default_template(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT)
+    assert "Meeting Summary" in prompt
+    assert "Key Decisions" in prompt
+    assert "Action Items" in prompt
+
+  def test_includes_playbook(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+    assert SAMPLE_PLAYBOOK in prompt
+    assert "Playbook 覆蓋率" in prompt
+
+  def test_no_playbook_coverage_without_playbook(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT)
+    assert "Playbook 覆蓋率" not in prompt
+
+  def test_custom_template(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT, template=CUSTOM_TEMPLATE)
+    assert "TL;DR" in prompt
+    assert "Takeaways" in prompt
+
+  def test_playbook_has_checkmarks(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+    assert "\u2705" in prompt  # ✅
+    assert "\u274c" in prompt  # ❌
+
+  def test_playbook_references_timestamps(self):
+    prompt = _build_summarize_prompt(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+    assert "timestamp" in prompt.lower()
 
 
-class TestSummarizeCallsAnthropic:
-  """Verify summarize() sends correct requests to the Anthropic API."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_calls_anthropic_with_structured_system_prompt(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "Meeting Summary" in system_prompt
-    assert "Key Decisions" in system_prompt
-    assert "Action Items" in system_prompt
-    assert "Key Discussions" in system_prompt
-    assert "Follow-ups" in system_prompt
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_sends_transcript_as_user_message(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    user_content = call_kwargs["messages"][0]["content"]
-    assert SAMPLE_TRANSCRIPT in user_content
-
-
-class TestSummarizeTranscriptOnly:
-  """Test summarize() with transcript only (no playbook, no template)."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_no_cross_reference_instruction(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "cross-reference" not in system_prompt.lower()
-    assert "playbook" not in system_prompt.lower()
-
-
-class TestSummarizeWithPlaybook:
-  """Test summarize() with transcript + playbook."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_injects_cross_reference_instruction(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "cross-reference" in system_prompt.lower()
-    assert "objectives" in system_prompt.lower()
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_playbook_included_in_user_message(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    user_content = call_kwargs["messages"][0]["content"]
-    assert SAMPLE_PLAYBOOK in user_content
-    assert SAMPLE_TRANSCRIPT in user_content
-
-
-class TestPlaybookCoverageSection:
-  """Test that playbook triggers Playbook 覆蓋率 cross-reference instructions."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_system_prompt_includes_coverage_section_header(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "Playbook 覆蓋率" in system_prompt
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_system_prompt_includes_checkmark_for_addressed(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "\u2705" in system_prompt  # ✅
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_system_prompt_includes_cross_for_missed(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "\u274c" in system_prompt  # ❌
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_system_prompt_references_timestamps(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "timestamp" in system_prompt.lower()
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_no_coverage_section_without_playbook(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "Playbook 覆蓋率" not in system_prompt
-    assert "\u2705" not in system_prompt
-    assert "\u274c" not in system_prompt
-
-
-class TestSummarizeWithTemplate:
-  """Test summarize() with custom template."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_custom_template_in_system_prompt(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
-    summarize(SAMPLE_TRANSCRIPT, template=CUSTOM_TEMPLATE)
-
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    system_prompt = call_kwargs["system"]
-    assert "TL;DR" in system_prompt
-    assert "Takeaways" in system_prompt
-
-
-class TestSummarizeOutput:
-  """Test that summarize() returns a markdown string."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_returns_markdown_string(self, mock_cls):
-    expected = "# Meeting Summary\n\nThis is a summary."
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response(expected)
-
+class TestSummarize:
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_returns_cli_result(self, mock_cli):
+    mock_cli.return_value = "# Summary\n\nMock result."
     result = summarize(SAMPLE_TRANSCRIPT)
+    assert result == "# Summary\n\nMock result."
+    mock_cli.assert_called_once()
 
-    assert isinstance(result, str)
-    assert result == expected
-
-
-class TestSummarizeModelConfig:
-  """Test that the model parameter is configurable."""
-
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_default_model(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
-
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_passes_prompt_with_transcript(self, mock_cli):
+    mock_cli.return_value = "ok"
     summarize(SAMPLE_TRANSCRIPT)
+    prompt = mock_cli.call_args[0][0]
+    assert SAMPLE_TRANSCRIPT in prompt
 
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    assert call_kwargs["model"] == "claude-sonnet-4-20250514"
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_passes_playbook(self, mock_cli):
+    mock_cli.return_value = "ok"
+    summarize(SAMPLE_TRANSCRIPT, playbook=SAMPLE_PLAYBOOK)
+    prompt = mock_cli.call_args[0][0]
+    assert SAMPLE_PLAYBOOK in prompt
 
-  @patch("meeting_transcriber.summarizer.anthropic.Anthropic")
-  def test_custom_model(self, mock_cls):
-    mock_client = MagicMock()
-    mock_cls.return_value = mock_client
-    mock_client.messages.create.return_value = _make_mock_response()
 
-    summarize(SAMPLE_TRANSCRIPT, model="claude-opus-4-20250514")
+class TestSummarizeIncremental:
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_includes_existing_summary(self, mock_cli):
+    mock_cli.return_value = "updated summary"
+    result = summarize_incremental("new text", "existing summary")
+    prompt = mock_cli.call_args[0][0]
+    assert "existing summary" in prompt
+    assert "new text" in prompt
+    assert result == "updated summary"
 
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    assert call_kwargs["model"] == "claude-opus-4-20250514"
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_includes_playbook(self, mock_cli):
+    mock_cli.return_value = "ok"
+    summarize_incremental("new", "existing", playbook=SAMPLE_PLAYBOOK)
+    prompt = mock_cli.call_args[0][0]
+    assert SAMPLE_PLAYBOOK in prompt
+
+
+class TestBuildCleanPrompt:
+  def test_includes_chunk(self):
+    prompt = _build_clean_prompt("some transcript", None)
+    assert "some transcript" in prompt
+
+  def test_includes_playbook(self):
+    prompt = _build_clean_prompt("transcript", "playbook terms")
+    assert "playbook terms" in prompt
+
+  def test_includes_context_before(self):
+    prompt = _build_clean_prompt("main", None, context_before="before text")
+    assert "before text" in prompt
+    assert "CONTEXT" in prompt
+
+  def test_includes_context_after(self):
+    prompt = _build_clean_prompt("main", None, context_after="after text")
+    assert "after text" in prompt
+
+  def test_speaker_instructions(self):
+    prompt = _build_clean_prompt("transcript", None)
+    assert "NEVER swap speakers" in prompt
+
+
+class TestStripCodeFences:
+  def test_strips_preamble(self):
+    text = "Here is the cleaned transcript:\n[00:01] hello"
+    assert _strip_code_fences(text) == "[00:01] hello"
+
+  def test_strips_code_fences(self):
+    text = "```\n[00:01] hello\n```"
+    assert _strip_code_fences(text) == "[00:01] hello"
+
+  def test_strips_language_code_fence(self):
+    text = "```markdown\n[00:01] hello\n```"
+    assert _strip_code_fences(text) == "[00:01] hello"
+
+  def test_clean_text_unchanged(self):
+    text = "[00:01] [我方] hello"
+    assert _strip_code_fences(text) == "[00:01] [我方] hello"
+
+
+class TestCleanTranscript:
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_short_transcript_single_pass(self, mock_cli):
+    mock_cli.return_value = "[00:01] cleaned text"
+    result = clean_transcript("line1\nline2\nline3")
+    assert result == "[00:01] cleaned text"
+    assert mock_cli.call_count == 1
+
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_long_transcript_chunked(self, mock_cli):
+    mock_cli.return_value = "cleaned chunk"
+    lines = "\n".join([f"[{i:02d}:00] line {i}" for i in range(150)])
+    result = clean_transcript(lines)
+    assert mock_cli.call_count == 2  # 150 lines / 100 per chunk = 2
+
+  @patch("meeting_transcriber.summarizer.call_claude_cli")
+  def test_passes_playbook(self, mock_cli):
+    mock_cli.return_value = "cleaned"
+    clean_transcript("line1", playbook="playbook content")
+    prompt = mock_cli.call_args[0][0]
+    assert "playbook content" in prompt

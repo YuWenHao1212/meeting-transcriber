@@ -157,6 +157,46 @@ header h1 {
   font-size: 14px;
 }
 
+/* --- Collapsible playbook --- */
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-header:hover {
+  background: var(--cream-200);
+}
+
+.collapse-icon {
+  font-size: 10px;
+  margin-right: 4px;
+  color: var(--ink-300);
+  transition: transform 0.15s;
+}
+
+.collapsible-body.collapsed {
+  display: none !important;
+}
+
+/* --- Summary rendered --- */
+.summary-rendered {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+#summary-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--cream-300);
+}
+
+#summary-section h2 {
+  flex-shrink: 0;
+}
+
 /* Upload button in panel header */
 .upload-btn {
   cursor: pointer;
@@ -331,6 +371,39 @@ header h1 {
   cursor: default;
 }
 
+/* --- Transcript toggle tabs --- */
+.transcript-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--cream-300);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.toggle-tab {
+  background: none;
+  border: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-500);
+  cursor: pointer;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-tab.active {
+  background: var(--cream-50);
+  color: var(--brown-dark);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.toggle-tab:hover:not(.active) {
+  color: var(--brown-mid);
+}
+
 /* --- Transcript lines --- */
 .transcript-line {
   padding: 8px 0;
@@ -405,31 +478,7 @@ header h1 {
   color: var(--blue, #3b82f6);
 }
 
-/* Summary editor */
-#summary-section {
-  border-top: 1px solid var(--cream-300, #ddd);
-  padding-top: 8px;
-  margin-top: 8px;
-}
-
-#summary-section h2 {
-  margin-bottom: 6px;
-}
-
-.summary-editor {
-  width: 100%;
-  min-height: 200px;
-  padding: 8px;
-  font-family: inherit;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  border: 1px solid var(--cream-400, #ddd);
-  border-radius: 4px;
-  background: var(--cream-50, #fff);
-  color: var(--ink-700, #333);
-  resize: vertical;
-  box-sizing: border-box;
-}
+/* Summary section is styled in collapsible section above */
 
 .btn-midi {
   padding: 4px 8px;
@@ -555,6 +604,13 @@ footer {
 
 .btn-coach-both {
   background: var(--brown-mid);
+  color: #fff;
+  font-size: 14px;
+  padding: 8px 16px;
+}
+
+.btn-clean {
+  background: #7c3aed;
   color: #fff;
   font-size: 14px;
   padding: 8px 16px;
