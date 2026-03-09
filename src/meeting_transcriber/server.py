@@ -812,6 +812,7 @@ def create_app(
 
     # Auto-clean transcript on pause if there are chunks
     if session["transcript_chunks"] and not session.get("_cleaning"):
+
       async def _auto_clean():
         from meeting_transcriber.summarizer import clean_transcript
 
@@ -1036,9 +1037,7 @@ def create_app(
 
     try:
       # Run in thread to avoid blocking the async event loop
-      cleaned = await asyncio.to_thread(
-        clean_transcript, raw_text, playbook=playbook_text
-      )
+      cleaned = await asyncio.to_thread(clean_transcript, raw_text, playbook=playbook_text)
       print(f"[clean] Done: {len(cleaned)} chars")
     except Exception as e:
       session["_cleaning"] = False
@@ -1148,9 +1147,7 @@ def create_app(
   @app.post("/api/save")
   async def save_notes() -> JSONResponse:
     has_data = (
-      session["transcript_chunks"]
-      or session.get("cleaned_transcript")
-      or session.get("summary")
+      session["transcript_chunks"] or session.get("cleaned_transcript") or session.get("summary")
     )
     if not has_data:
       return JSONResponse(

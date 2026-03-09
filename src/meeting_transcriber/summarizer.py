@@ -202,9 +202,9 @@ def _build_clean_prompt(
 
 def _strip_code_fences(text: str) -> str:
   """Remove markdown code fences and preamble from LLM output."""
-  text = re.sub(r'^(?:Here is the cleaned transcript[:\s]*\n*)', '', text, flags=re.IGNORECASE)
-  text = re.sub(r'^```\w*\n?', '', text)
-  text = re.sub(r'\n?```\s*$', '', text)
+  text = re.sub(r"^(?:Here is the cleaned transcript[:\s]*\n*)", "", text, flags=re.IGNORECASE)
+  text = re.sub(r"^```\w*\n?", "", text)
+  text = re.sub(r"\n?```\s*$", "", text)
   return text.strip()
 
 
