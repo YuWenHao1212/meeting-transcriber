@@ -157,7 +157,7 @@ class TestCleanTranscript:
   def test_long_transcript_chunked(self, mock_cli):
     mock_cli.return_value = "cleaned chunk"
     lines = "\n".join([f"[{i:02d}:00] line {i}" for i in range(150)])
-    result = clean_transcript(lines)
+    clean_transcript(lines)
     assert mock_cli.call_count == 2  # 150 lines / 100 per chunk = 2
 
   @patch("meeting_transcriber.summarizer.call_claude_cli")
